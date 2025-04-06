@@ -13,39 +13,27 @@ import { AuthContext } from "../../navigation/RootNavigator";
 
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useContext(AuthContext);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneNumberError, setPhoneNumberError] = useState("");
 
-  const validateEmail = (email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!email) {
-      setEmailError("Email is required");
+  const validatePhoneNumber = (number) => {
+    // Simple validation for phone number
+    if (!number) {
+      setPhoneNumberError("Phone number is required");
       return false;
-    } else if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email");
+    } else if (!/^\d{10}$/.test(number.replace(/\D/g, ""))) {
+      setPhoneNumberError("Please enter a valid 10-digit phone number");
       return false;
     }
-    setEmailError("");
-    return true;
-  };
-
-  const validatePassword = (password) => {
-    if (!password) {
-      setPasswordError("Password is required");
-      return false;
-    } else if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
-      return false;
-    }
-    setPasswordError("");
+    setPhoneNumberError("");
     return true;
   };
 
   const handleLogin = () => {
-    // Bypass all validation and directly sign in
-    signIn();
+    if (validatePhoneNumber(phoneNumber)) {
+      // Navigate to OTP screen with the phone number
+      navigation.navigate("OTPVerification", { phoneNumber });
+    }
   };
 
   return (
@@ -62,38 +50,23 @@ const LoginScreen = ({ navigation }) => {
       >
         <View style={styles.content}>
           <Text style={styles.title}>Welcome back!</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.subtitle}>
+            Enter your phone number to continue
+          </Text>
 
           <View style={styles.form}>
             <TextField
-              label="Email"
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              error={emailError}
-              keyboardType="email-address"
-              autoCapitalize="none"
+              label="Phone Number"
+              placeholder="Enter your phone number"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              error={phoneNumberError}
+              keyboardType="phone-pad"
             />
-
-            <TextField
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              error={passwordError}
-              secureTextEntry
-            />
-
-            <TouchableOpacity
-              style={styles.forgotPasswordContainer}
-              onPress={() => navigation.navigate("ForgotPassword")}
-            >
-              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
           </View>
 
           <ButtonPlain
-            title="Log In"
+            title="Continue"
             onPress={handleLogin}
             fullWidth
             style={styles.button}
@@ -143,15 +116,6 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: spacing.xl,
-  },
-  forgotPasswordContainer: {
-    alignSelf: "flex-end",
-    marginTop: spacing.sm,
-  },
-  forgotPasswordText: {
-    fontSize: typography.fontSize.md,
-    color: colors.primary,
-    fontWeight: typography.fontWeight.medium,
   },
   button: {
     marginBottom: spacing.xl,

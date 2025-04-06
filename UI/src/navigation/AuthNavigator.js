@@ -6,6 +6,7 @@ import {
   LoginScreen,
   SignUpScreen,
   ForgotPasswordScreen,
+  OTPVerificationScreen,
 } from "../screens";
 
 const Stack = createNativeStackNavigator();
@@ -22,6 +23,7 @@ const AuthNavigator = () => {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="SignUp" component={SignUpScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
     </Stack.Navigator>
   );
 };
