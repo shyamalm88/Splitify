@@ -21,7 +21,7 @@ const authRoutes = require("./routes/auth");
 
 // Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -81,8 +81,8 @@ io.on("connection", (socket) => {
 });
 
 // Start server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(port, () => {
+  console.log(`Server started on port ${port}`);
 });
 
 module.exports = app;

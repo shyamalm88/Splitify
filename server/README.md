@@ -101,6 +101,78 @@ const verifyCode = async (confirmation, code) => {
 };
 ```
 
+## OTP-Based Authentication
+
+The server supports OTP-based authentication through Firebase. This allows users to authenticate using their phone number and a one-time password (OTP) sent to their device.
+
+### API Endpoints
+
+#### Send OTP
+
+```
+POST /api/auth/send-otp
+```
+
+Request body:
+
+```json
+{
+  "phoneNumber": "+1234567890"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "sessionInfo": "session-id-string",
+  "inDevMode": true,
+  "message": "OTP code sent successfully"
+}
+```
+
+#### Verify OTP
+
+```
+POST /api/auth/verify-otp
+```
+
+Request body:
+
+```json
+{
+  "phoneNumber": "+1234567890",
+  "code": "123456",
+  "sessionInfo": "session-id-string"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "token": "jwt-token-string",
+  "user": {
+    "id": "user-id",
+    "username": "username",
+    "phoneNumber": "+1234567890",
+    "email": "user@example.com"
+  },
+  "firebaseToken": "firebase-custom-token",
+  "inDevMode": true
+}
+```
+
+### Development Mode
+
+In development mode, the OTP code is always "123456" and is logged to the console. This allows for easy testing without actually sending SMS messages.
+
+### Production Mode
+
+In production mode, Firebase Authentication is used to send and verify OTP codes. This requires setting up Firebase Auth with a phone provider in your Firebase project.
+
 ## API Endpoints
 
 ### Users

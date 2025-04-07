@@ -1,27 +1,154 @@
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
+import "firebase/compat/firestore";
+import "firebase/compat/messaging";
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+
+// Configure Expo notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // Initialize Firebase if it hasn't been initialized already
 const initializeFirebase = () => {
   if (!firebase.apps.length) {
     // Your Firebase configuration
-    // Get this from the Firebase console: Project settings > General > Your apps > SDK setup and configuration
     const firebaseConfig = {
-      // Replace with your actual Firebase config
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_AUTH_DOMAIN",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_STORAGE_BUCKET",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID",
+      apiKey: "AIzaSyC1xLhbGBeg7pCJNM-ON5aMCT_1RY5560I",
+      authDomain: "splitify-cd256.firebaseapp.com",
+      projectId: "splitify-cd256",
+      storageBucket: "splitify-cd256.firebasestorage.app",
+      messagingSenderId: "1056124364476",
+      appId: "1:1234567890:web:321abc456def7890",
     };
 
     firebase.initializeApp(firebaseConfig);
+
+    // Initialize Firebase messaging only for web platform
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      firebase.messaging
+    ) {
+      try {
+        firebase.messaging();
+        console.log("Firebase messaging initialized successfully");
+      } catch (error) {
+        console.error("Error initializing Firebase messaging:", error);
+      }
+    }
   }
 };
 
 // Call initialize function
 initializeFirebase();
+
+// Function to request notification permission and get token
+const requestNotificationPermission = async () => {
+  try {
+    // Handle React Native platform
+    if (Platform.OS !== "web") {
+      // Request permission for notifications
+      const { status: existingStatus } =
+        await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") {
+        return {
+          success: false,
+          error: "Permission not granted",
+        };
+      }
+
+      // Get the Expo push token
+      const expoPushToken = await Notifications.getExpoPushTokenAsync({
+        projectId: "1056124364476", // Your Firebase sender ID
+      });
+
+      console.log("Expo push token:", expoPushToken);
+
+      return {
+        success: true,
+        token: expoPushToken.data,
+      };
+    }
+
+    // Handle web platform
+    if (!firebase.messaging || !firebase.messaging.isSupported()) {
+      console.warn("Firebase messaging is not supported in this environment");
+      return { success: false, error: "Messaging not supported" };
+    }
+
+    const messaging = firebase.messaging();
+
+    // Request permission
+    const permission = await Notification.requestPermission();
+
+    if (permission !== "granted") {
+      return {
+        success: false,
+        error: "Notification permission not granted",
+      };
+    }
+
+    // Get token
+    const token = await messaging.getToken({
+      vapidKey:
+        "BAy7oap_tw_ewQqkQJISkP6rPav_XhxFTuEu2lBsmyhfdbMJfzqm5n6eJwXYri3YY3xBYaGib8V9yz_ATw02uPM",
+    });
+
+    return { success: true, token };
+  } catch (error) {
+    console.error("Error requesting notification permission:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to request notification permission",
+    };
+  }
+};
+
+// Handle foreground messages
+const setupMessageListener = () => {
+  try {
+    // Only proceed with web messaging if on web platform
+    if (Platform.OS !== "web") {
+      console.warn(
+        "Firebase web messaging is not supported on mobile platforms"
+      );
+      return;
+    }
+
+    if (!firebase.messaging || !firebase.messaging.isSupported()) {
+      return;
+    }
+
+    const messaging = firebase.messaging();
+
+    // Handle foreground messages
+    messaging.onMessage((payload) => {
+      console.log("Message received in foreground:", payload);
+      // You can show a notification here using the Notification API
+      const { title, body } = payload.notification;
+
+      new Notification(title, {
+        body,
+        icon: "/favicon.ico",
+      });
+    });
+  } catch (error) {
+    console.error("Error setting up message listener:", error);
+  }
+};
 
 // Alternative authentication methods that work better with Expo
 const emailLinkAuth = {
@@ -177,4 +304,11 @@ const phoneAuth = {
   },
 };
 
-export { firebase, phoneAuth, emailLinkAuth };
+// Export the firebase instance and utility functions
+export {
+  firebase,
+  phoneAuth,
+  emailLinkAuth,
+  requestNotificationPermission,
+  setupMessageListener,
+};

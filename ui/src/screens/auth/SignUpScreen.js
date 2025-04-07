@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useCallback } from "react";
 import {
   StyleSheet,
   View,
@@ -9,10 +9,12 @@ import {
 } from "react-native";
 import { Button, TextField, Header } from "../../components";
 import { colors, typography, spacing } from "../../theme/theme";
-import { AuthContext } from "../../navigation/RootNavigator";
+import { AuthContext } from "../../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 
-const SignUpScreen = ({ navigation }) => {
+const SignUpScreen = () => {
   const { signIn } = useContext(AuthContext);
+  const navigation = useNavigation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -85,12 +87,31 @@ const SignUpScreen = ({ navigation }) => {
     }
   };
 
+  const handleGoBack = useCallback(() => {
+    if (navigation && navigation.goBack) {
+      navigation.goBack();
+    } else {
+      console.warn("Navigation not available");
+    }
+  }, [navigation]);
+
+  const handleNavigate = useCallback(
+    (routeName) => {
+      if (navigation && navigation.navigate) {
+        navigation.navigate(routeName);
+      } else {
+        console.warn("Navigation not available");
+      }
+    },
+    [navigation]
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <Header
         title="Create Account"
         leftIcon={<Text style={styles.backButton}>←</Text>}
-        onLeftPress={() => navigation.goBack()}
+        onLeftPress={handleGoBack}
       />
 
       <ScrollView
@@ -98,60 +119,64 @@ const SignUpScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Create an account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
+          <Text style={styles.title}>Join Splitify</Text>
+          <Text style={styles.subtitle}>
+            Create an account to start splitting expenses with friends and
+            family
+          </Text>
 
           <View style={styles.form}>
             <TextField
               label="Full Name"
-              placeholder="Enter your full name"
               value={name}
               onChangeText={setName}
               error={nameError}
+              placeholder="Enter your full name"
             />
 
             <TextField
               label="Email"
-              placeholder="Enter your email"
               value={email}
               onChangeText={setEmail}
               error={emailError}
+              placeholder="Enter your email"
               keyboardType="email-address"
               autoCapitalize="none"
             />
 
             <TextField
               label="Password"
-              placeholder="Create a password"
               value={password}
               onChangeText={setPassword}
               error={passwordError}
+              placeholder="Create a password"
               secureTextEntry
             />
 
             <TextField
               label="Confirm Password"
-              placeholder="Confirm your password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               error={confirmPasswordError}
+              placeholder="Confirm your password"
               secureTextEntry
             />
-          </View>
 
-          <Button
-            title="Sign Up"
-            onPress={handleSignUp}
-            size="large"
-            fullWidth
-            style={styles.button}
-          />
+            <Button
+              title="Create Account"
+              onPress={handleSignUp}
+              variant="primary"
+              size="large"
+              fullWidth
+              style={styles.signUpButton}
+            />
 
-          <View style={styles.loginContainer}>
-            <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-              <Text style={styles.loginLink}>Log In</Text>
-            </TouchableOpacity>
+            <View style={styles.loginContainer}>
+              <Text style={styles.loginText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => handleNavigate("Login")}>
+                <Text style={styles.loginLink}>Log In</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -192,7 +217,7 @@ const styles = StyleSheet.create({
   form: {
     marginBottom: spacing.xl,
   },
-  button: {
+  signUpButton: {
     marginBottom: spacing.xl,
   },
   loginContainer: {

@@ -2,17 +2,29 @@ import React from "react";
 import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
 
 const LogoutConfirmScreen = ({ navigation }) => {
+  const { logout } = useAuth();
+
   const handleCancel = () => {
     navigation.goBack();
   };
 
-  const handleLogout = () => {
-    // Implement actual logout logic here
-    console.log("User confirmed logout");
-    // Navigate to login screen or clear auth state
-    navigation.navigate("Auth");
+  const handleLogout = async () => {
+    try {
+      const result = await logout();
+      if (result.success) {
+        // Close the modal first
+        navigation.goBack();
+        // Let the auth state change trigger the navigation
+        console.log("Logout successful");
+      } else {
+        console.error("Logout failed:", result.error);
+      }
+    } catch (error) {
+      console.error("Error during logout:", error);
+    }
   };
 
   return (
@@ -75,7 +87,7 @@ const styles = StyleSheet.create({
   },
   logoutButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.error,
     borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     alignItems: "center",
@@ -83,7 +95,7 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: typography.fontSize.md,
     fontWeight: typography.fontWeight.medium,
-    color: colors.black,
+    color: colors.white,
   },
 });
 

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -16,81 +17,66 @@ import {
   shadows,
   borderRadius,
 } from "../../theme/theme";
-
-// Mock data for notifications
-const notificationsData = [
-  {
-    id: "1",
-    title: "New Update Available",
-    description:
-      "Update the Splitify and enjoy new features for a better split bill experience.",
-    icon: "system-update",
-    date: "Today",
-    time: "09:32 AM",
-    hasAlert: true,
-  },
-  {
-    id: "2",
-    title: "Enable 2FA for Security!",
-    description:
-      "Use two-factor authentication for extra security on your account.",
-    icon: "security",
-    date: "Today",
-    time: "08:12 AM",
-    hasAlert: true,
-  },
-  {
-    id: "3",
-    title: "Multiple Payments Support",
-    description:
-      "Now you can use multiple cards. Go to Account > Payment methods to add one.",
-    icon: "credit-card",
-    date: "Yesterday",
-    time: "14:25 PM",
-    hasAlert: false,
-  },
-  {
-    id: "4",
-    title: "Christmas and New Year Event!",
-    description:
-      "Big offer a special event for you on the special day of Christmas.",
-    icon: "celebration",
-    date: "Yesterday",
-    time: "10:40 AM",
-    hasAlert: false,
-  },
-  {
-    id: "5",
-    title: "Premium Features Unlocked!",
-    description:
-      "Upgrade to Splitify Premium and unlock more features for free.",
-    icon: "stars",
-    date: "Dec 18, 2023",
-    time: "16:45 PM",
-    hasAlert: false,
-  },
-  {
-    id: "6",
-    title: "Group Invitation",
-    description: "John invited you to join 'Team Lunch' group",
-    icon: "group-add",
-    date: "Dec 18, 2023",
-    time: "11:10 AM",
-    hasAlert: false,
-  },
-];
+import { useNotifications } from "../../context/NotificationContext";
 
 const NotificationScreen = ({ navigation }) => {
+  const { notifications, markAsRead, markAllAsRead, clearAllNotifications } =
+    useNotifications();
+
   // Get unique dates from notifications data
   const getUniqueDates = () => {
-    const dates = notificationsData.map((item) => item.date);
+    const dates = notifications.map((item) => item.date);
     return [...new Set(dates)];
   };
 
   // Handle notification item press
   const handleNotificationPress = (item) => {
-    console.log("Notification pressed:", item.id);
-    // Add navigation or other actions here
+    // Mark as read if it has an alert
+    if (item.hasAlert) {
+      markAsRead(item.id);
+    }
+
+    // Handle navigation based on notification data
+    if (item.data?.route) {
+      navigation.navigate(item.data.route, item.data.params);
+    }
+  };
+
+  // Handle mark all as read
+  const handleMarkAllAsRead = () => {
+    Alert.alert(
+      "Mark All as Read",
+      "Are you sure you want to mark all notifications as read?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Mark All",
+          onPress: markAllAsRead,
+        },
+      ]
+    );
+  };
+
+  // Handle clear all notifications
+  const handleClearAll = () => {
+    Alert.alert(
+      "Clear All Notifications",
+      "Are you sure you want to clear all notifications? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Clear All",
+          style: "destructive",
+          onPress: clearAllNotifications,
+        },
+      ]
+    );
   };
 
   return (
@@ -105,59 +91,89 @@ const NotificationScreen = ({ navigation }) => {
         >
           <MaterialIcons name="arrow-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.title}>Notification</Text>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => navigation.navigate("NotificationSettings")}
-        >
-          <MaterialIcons name="settings" size={24} color={colors.black} />
-        </TouchableOpacity>
+        <Text style={styles.title}>Notifications</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleMarkAllAsRead}
+          >
+            <MaterialIcons name="done-all" size={24} color={colors.black} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={handleClearAll}
+          >
+            <MaterialIcons name="delete-sweep" size={24} color={colors.black} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate("NotificationSettings")}
+          >
+            <MaterialIcons name="settings" size={24} color={colors.black} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Notifications List */}
       <ScrollView style={styles.notificationsContainer}>
-        {getUniqueDates().map((date) => (
-          <View key={date}>
-            {/* Date Header */}
-            <View style={styles.dateHeaderContainer}>
-              <Text style={styles.dateHeader}>{date}</Text>
-            </View>
-
-            {/* Notification Items for this date */}
-            {notificationsData
-              .filter((item) => item.date === date)
-              .map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.notificationItem}
-                  onPress={() => handleNotificationPress(item)}
-                >
-                  <View style={styles.iconContainer}>
-                    <MaterialIcons
-                      name={item.icon}
-                      size={24}
-                      color={colors.gray800}
-                    />
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <View style={styles.notificationHeader}>
-                      <Text style={styles.notificationTitle}>{item.title}</Text>
-                      {item.hasAlert && <View style={styles.alertDot} />}
-                    </View>
-                    <Text style={styles.notificationDescription}>
-                      {item.description}
-                    </Text>
-                    <Text style={styles.notificationTime}>{item.time}</Text>
-                  </View>
-                  <MaterialIcons
-                    name="chevron-right"
-                    size={24}
-                    color={colors.gray400}
-                  />
-                </TouchableOpacity>
-              ))}
+        {notifications.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons
+              name="notifications-off"
+              size={48}
+              color={colors.gray400}
+            />
+            <Text style={styles.emptyText}>No notifications yet</Text>
           </View>
-        ))}
+        ) : (
+          getUniqueDates().map((date) => (
+            <View key={date}>
+              {/* Date Header */}
+              <View style={styles.dateHeaderContainer}>
+                <Text style={styles.dateHeader}>{date}</Text>
+              </View>
+
+              {/* Notification Items for this date */}
+              {notifications
+                .filter((item) => item.date === date)
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.notificationItem,
+                      item.hasAlert && styles.unreadNotification,
+                    ]}
+                    onPress={() => handleNotificationPress(item)}
+                  >
+                    <View style={styles.iconContainer}>
+                      <MaterialIcons
+                        name={item.icon}
+                        size={24}
+                        color={colors.gray800}
+                      />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <View style={styles.notificationHeader}>
+                        <Text style={styles.notificationTitle}>
+                          {item.title}
+                        </Text>
+                        {item.hasAlert && <View style={styles.alertDot} />}
+                      </View>
+                      <Text style={styles.notificationDescription}>
+                        {item.description}
+                      </Text>
+                      <Text style={styles.notificationTime}>{item.time}</Text>
+                    </View>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={24}
+                      color={colors.gray400}
+                    />
+                  </TouchableOpacity>
+                ))}
+            </View>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -177,6 +193,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerButton: {
+    padding: spacing.xs,
+    marginLeft: spacing.sm,
+  },
   backButton: {
     padding: spacing.xs,
   },
@@ -185,12 +209,20 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.bold,
     color: colors.black,
   },
-  settingsButton: {
-    padding: spacing.xs,
-  },
   notificationsContainer: {
     flex: 1,
     paddingHorizontal: spacing.lg,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: spacing.xl * 2,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.md,
+    color: colors.gray500,
+    marginTop: spacing.md,
   },
   dateHeaderContainer: {
     paddingVertical: spacing.sm,
@@ -207,6 +239,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
+  },
+  unreadNotification: {
+    backgroundColor: colors.gray50,
   },
   iconContainer: {
     width: 40,

@@ -447,6 +447,24 @@ const GroupDetailScreen = ({ navigation, route }) => {
     </View>
   );
 
+  const getAvatarColor = (name) => {
+    const colors = [
+      { name: "A", avatarColor: colors.primaryLight }, // Light yellow
+      { name: "B", avatarColor: colors.info }, // Blue
+      { name: "C", avatarColor: colors.success }, // Green
+      { name: "D", avatarColor: colors.warning }, // Orange
+      { name: "E", avatarColor: colors.error }, // Red
+      { name: "F", avatarColor: colors.primary }, // Yellow
+      { name: "G", avatarColor: colors.info }, // Blue
+      { name: "H", avatarColor: colors.success }, // Green
+      { name: "I", avatarColor: colors.warning }, // Orange
+      { name: "J", avatarColor: colors.error }, // Red
+    ];
+
+    const color = colors.find((c) => c.name === name.charAt(0));
+    return color ? color.avatarColor : colors.gray200;
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={["right", "left", "top"]}>
       {/* Header */}

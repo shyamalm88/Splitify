@@ -57,7 +57,7 @@ const GroupsScreen = ({ navigation, route }) => {
       members: ["Geoffrey", "Augustine", "Danny"],
       image: null,
       totalExpenses: "$156.80",
-      color: "#BDB2FF", // Light purple
+      color: colors.primaryLight, // Light yellow
     },
     {
       id: "6",

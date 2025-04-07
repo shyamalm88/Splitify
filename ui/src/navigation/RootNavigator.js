@@ -1,55 +1,50 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { createStackNavigator } from "@react-navigation/stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useAuth } from "../context/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Auth Screens
+import SplashScreen from "../screens/auth/SplashScreen";
+import WelcomeScreen from "../screens/auth/WelcomeScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
-import OtpVerificationScreen from "../screens/auth/OtpVerificationScreen";
+import OtpVerificationScreen from "../screens/auth/OTPVerificationScreen";
 import SignUpScreen from "../screens/auth/SignUpScreen";
+import WalkthroughScreen from "../screens/walkthrough/WalkthroughScreen";
 
-// Main App Screens
-import HomeScreen from "../screens/main/HomeScreen";
-import ProfileScreen from "../screens/main/ProfileScreen";
+// Import AppNavigator for main navigation flow
+import AppNavigator from "./AppNavigator";
 
-const Stack = createStackNavigator();
-
-const AuthStack = () => {
-  return (
-    <Stack.Navigator
-      initialRouteName="Login"
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
-      <Stack.Screen name="SignUp" component={SignUpScreen} />
-    </Stack.Navigator>
-  );
-};
-
-const MainStack = () => {
-  return (
-    <Stack.Navigator
-      initialRouteName="Home"
-      screenOptions={{
-        headerShown: false,
-      }}
-    >
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-    </Stack.Navigator>
-  );
-};
+const Stack = createNativeStackNavigator();
 
 const RootNavigator = () => {
   const { isAuthenticated, loading } = useAuth();
+  const [authState, setAuthState] = useState(null);
+  const [hasCompletedWalkthrough, setHasCompletedWalkthrough] = useState(null);
 
-  if (loading) {
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = isAuthenticated();
+      setAuthState(authenticated);
+
+      try {
+        const walkthroughCompleted = await AsyncStorage.getItem(
+          "walkthrough_completed"
+        );
+        setHasCompletedWalkthrough(walkthroughCompleted === "true");
+      } catch (error) {
+        console.error("Error checking walkthrough status:", error);
+        setHasCompletedWalkthrough(false);
+      }
+    };
+
+    checkAuth();
+  }, [isAuthenticated]);
+
+  if (loading || hasCompletedWalkthrough === null) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#5465ff" />
+        <ActivityIndicator size="large" color="#FEBA17" />
       </View>
     );
   }
@@ -58,12 +53,64 @@ const RootNavigator = () => {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
+        animation: "none",
       }}
     >
-      {isAuthenticated() ? (
-        <Stack.Screen name="Main" component={MainStack} />
+      {authState ? (
+        <Stack.Screen
+          name="Main"
+          component={AppNavigator}
+          options={{
+            gestureEnabled: false,
+          }}
+        />
       ) : (
-        <Stack.Screen name="Auth" component={AuthStack} />
+        <>
+          <Stack.Screen
+            name="Splash"
+            component={SplashScreen}
+            options={{
+              gestureEnabled: false,
+            }}
+          />
+          {!hasCompletedWalkthrough && (
+            <Stack.Screen
+              name="Walkthrough"
+              component={WalkthroughScreen}
+              options={{
+                gestureEnabled: false,
+              }}
+            />
+          )}
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="OtpVerification"
+            component={OtpVerificationScreen}
+            options={{
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="SignUp"
+            component={SignUpScreen}
+            options={{
+              gestureEnabled: false,
+            }}
+          />
+        </>
       )}
     </Stack.Navigator>
   );

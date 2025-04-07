@@ -15,7 +15,8 @@ prepare_react_native_project!
 
 target 'UIexpo' do
   use_expo_modules!
-
+  
+  # Other configuration
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
@@ -59,6 +60,26 @@ target 'UIexpo' do
       target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
         resource_bundle_target.build_configurations.each do |config|
           config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        end
+      end
+    end
+    
+    # Fix for Swift modules
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
+        
+        # Force disable bitcode
+        config.build_settings['ENABLE_BITCODE'] = 'NO'
+        
+        # Make sure all frameworks are embedded
+        config.build_settings['ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES'] = 'YES'
+      end
+      
+      # Enable SWIFT_VERSION for Swift Pods
+      if target.respond_to?(:product_type) and target.product_type == "com.apple.product-type.framework"
+        target.build_configurations.each do |config|
+          config.build_settings['SWIFT_VERSION'] = '5.0'
         end
       end
     end

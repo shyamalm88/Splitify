@@ -13,18 +13,35 @@ const User = require("../models/User");
 exports.sendOtpCode = async (req, res) => {
   try {
     const { phoneNumber } = req.body;
+    console.log(`[OTP SERVER] Received request to send OTP to: ${phoneNumber}`);
 
     if (!phoneNumber) {
+      console.log(`[OTP SERVER] Error: Phone number is missing`);
       return res.status(400).json({
         success: false,
         message: "Phone number is required",
       });
     }
 
+    // Validate phone number format
+    const { validatePhoneNumber } = require("../utils/validation");
+    if (!validatePhoneNumber(phoneNumber)) {
+      console.log(`[OTP SERVER] Error: Invalid phone number format`);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid phone number format",
+      });
+    }
+
     // Send OTP through Firebase
+    console.log(`[OTP SERVER] Calling Firebase to send OTP to: ${phoneNumber}`);
     const result = await sendOTP(phoneNumber);
+    console.log(`[OTP SERVER] Firebase response:`, JSON.stringify(result));
 
     if (!result.success) {
+      console.log(
+        `[OTP SERVER] Error sending OTP: ${result.error || "Unknown error"}`
+      );
       return res.status(500).json({
         success: false,
         message: result.error || "Failed to send OTP",
@@ -32,6 +49,9 @@ exports.sendOtpCode = async (req, res) => {
     }
 
     // Return the session info needed for verification
+    console.log(
+      `[OTP SERVER] OTP sent successfully. Session info: ${result.sessionInfo}`
+    );
     return res.json({
       success: true,
       sessionInfo: result.sessionInfo,
@@ -39,10 +59,11 @@ exports.sendOtpCode = async (req, res) => {
       message: "OTP code sent successfully",
     });
   } catch (error) {
-    console.error("Error in sendOtpCode:", error);
+    console.error("[OTP SERVER] Error in sendOtpCode:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while sending OTP",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
@@ -53,8 +74,18 @@ exports.sendOtpCode = async (req, res) => {
 exports.verifyOtpCode = async (req, res) => {
   try {
     const { phoneNumber, code, sessionInfo } = req.body;
+    console.log("[OTP SERVER] Received verification request with data:", {
+      phoneNumber,
+      code,
+      sessionInfo,
+    });
 
     if (!phoneNumber || !code || !sessionInfo) {
+      console.log("[OTP SERVER] Missing required fields:", {
+        hasPhoneNumber: !!phoneNumber,
+        hasCode: !!code,
+        hasSessionInfo: !!sessionInfo,
+      });
       return res.status(400).json({
         success: false,
         message:
@@ -63,9 +94,17 @@ exports.verifyOtpCode = async (req, res) => {
     }
 
     // Verify the OTP
+    console.log(`[OTP SERVER] Calling Firebase to verify OTP`);
     const result = await verifyOTP(phoneNumber, code, sessionInfo);
+    console.log(
+      `[OTP SERVER] Firebase verification response:`,
+      JSON.stringify(result)
+    );
 
     if (!result.success) {
+      console.log(
+        `[OTP SERVER] Error verifying OTP: ${result.error || "Invalid code"}`
+      );
       return res.status(400).json({
         success: false,
         message: result.error || "Invalid verification code",
@@ -73,10 +112,14 @@ exports.verifyOtpCode = async (req, res) => {
     }
 
     // Find or create user in our database
+    console.log(
+      `[OTP SERVER] Looking up user with phone: ${result.phoneNumber}`
+    );
     let user = await User.findOne({ phoneNumber: result.phoneNumber });
 
     if (!user) {
       // If no user exists with this phone, create one
+      console.log(`[OTP SERVER] User not found, creating new user`);
       const username = `user_${Math.floor(100000 + Math.random() * 900000)}`; // Generate random username
       const email = `${username}@example.com`; // Generate temporary email
       const password = Math.random().toString(36).slice(-10); // Generate random password
@@ -90,21 +133,30 @@ exports.verifyOtpCode = async (req, res) => {
       });
 
       await user.save();
+      console.log(`[OTP SERVER] New user created with ID: ${user._id}`);
     } else {
       // Update Firebase UID if needed
+      console.log(`[OTP SERVER] Existing user found with ID: ${user._id}`);
       if (user.firebaseUid !== result.uid) {
+        console.log(
+          `[OTP SERVER] Updating Firebase UID from ${user.firebaseUid} to ${result.uid}`
+        );
         user.firebaseUid = result.uid;
         await user.save();
       }
     }
 
     // Generate JWT token for our API
+    console.log(`[OTP SERVER] Generating JWT token for user: ${user._id}`);
     const token = jwt.sign(
       { id: user._id, firebaseUid: user.firebaseUid },
       process.env.JWT_SECRET || "your-jwt-secret-key",
       { expiresIn: "30d" }
     );
 
+    console.log(
+      `[OTP SERVER] OTP verification successful, returning token and user data`
+    );
     return res.json({
       success: true,
       token,
@@ -118,7 +170,7 @@ exports.verifyOtpCode = async (req, res) => {
       inDevMode: result.inDevMode || false,
     });
   } catch (error) {
-    console.error("Error in verifyOtpCode:", error);
+    console.error("[OTP SERVER] Error in verifyOtpCode:", error);
     return res.status(500).json({
       success: false,
       message: "Server error while verifying OTP",

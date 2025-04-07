@@ -1,7 +1,13 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import { API_URL } from "../config/constants";
+import expoAuth from "../config/expo-firebase";
 
 // Create auth context
 export const AuthContext = createContext();
@@ -18,19 +24,28 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const loadStoredAuthState = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem("token");
-        const storedUser = await AsyncStorage.getItem("user");
+        // Check if user is logged in using our auth helper
+        const isLoggedIn = await expoAuth.isUserLoggedIn();
 
-        if (storedToken && storedUser) {
-          setToken(storedToken);
-          setUser(JSON.parse(storedUser));
+        if (isLoggedIn) {
+          // Get user data
+          const userData = await expoAuth.getCurrentUser();
+          // Retrieve token from storage
+          const authToken = await AsyncStorage.getItem("auth_token");
 
-          // Set default Authorization header for all axios requests
-          axios.defaults.headers.common["Authorization"] =
-            `Bearer ${storedToken}`;
+          if (userData && authToken) {
+            setToken(authToken);
+            setUser(userData);
+
+            // Set default Authorization header for all axios requests
+            axios.defaults.headers.common["Authorization"] =
+              `Bearer ${authToken}`;
+          }
         }
       } catch (error) {
         console.error("Error loading auth state:", error);
+        // Clean up any corrupted state
+        await AsyncStorage.multiRemove(["auth_token", "user_data"]);
       } finally {
         setLoading(false);
       }
@@ -42,16 +57,18 @@ export const AuthProvider = ({ children }) => {
   // Login function
   const login = async (userData, userToken) => {
     try {
-      // Store user data and token
-      await AsyncStorage.setItem("token", userToken);
-      await AsyncStorage.setItem("user", JSON.stringify(userData));
-
       // Update state
       setUser(userData);
       setToken(userToken);
 
       // Set default Authorization header
       axios.defaults.headers.common["Authorization"] = `Bearer ${userToken}`;
+
+      // Store the data in AsyncStorage to persist it
+      if (userData && userToken) {
+        await AsyncStorage.setItem("auth_token", userToken);
+        await AsyncStorage.setItem("user_data", JSON.stringify(userData));
+      }
 
       return { success: true };
     } catch (error) {
@@ -63,17 +80,23 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = async () => {
     try {
-      // Clear stored data
-      await AsyncStorage.removeItem("token");
-      await AsyncStorage.removeItem("user");
-      await AsyncStorage.removeItem("firebaseToken");
-
-      // Reset state
+      // First, clear the auth state to trigger UI update
       setUser(null);
       setToken(null);
 
       // Remove authorization header
       delete axios.defaults.headers.common["Authorization"];
+
+      // Then perform the actual logout
+      await expoAuth.signOut();
+
+      // Clear storage after state is updated
+      await AsyncStorage.multiRemove([
+        "auth_token",
+        "user_data",
+        "phone_auth_number",
+        "phone_auth_session",
+      ]);
 
       return { success: true };
     } catch (error) {
@@ -86,7 +109,7 @@ export const AuthProvider = ({ children }) => {
   const updateUserData = async (newUserData) => {
     try {
       const updatedUser = { ...user, ...newUserData };
-      await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+      await AsyncStorage.setItem("user_data", JSON.stringify(updatedUser));
       setUser(updatedUser);
       return { success: true };
     } catch (error) {
@@ -95,10 +118,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Check if user is authenticated
-  const isAuthenticated = () => {
+  // Check if user is authenticated - use useCallback to prevent unnecessary re-renders
+  const isAuthenticated = useCallback(() => {
     return !!token && !!user;
-  };
+  }, [token, user]);
 
   // Context values
   const value = {

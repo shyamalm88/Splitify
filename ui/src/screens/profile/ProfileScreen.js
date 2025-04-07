@@ -17,6 +17,7 @@ import {
   shadows,
   borderRadius,
 } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
 
 // Menu item data
 const menuItems = [
@@ -77,6 +78,8 @@ const menuItems = [
 ];
 
 const ProfileScreen = ({ navigation }) => {
+  const { logout } = useAuth();
+
   const handleMenuItemPress = (route) => {
     console.log(`Navigating to ${route}`);
     navigation.navigate(route);
@@ -84,7 +87,9 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleLogout = () => {
     console.log("Opening logout confirmation");
-    navigation.navigate("LogoutConfirm");
+    navigation.navigate("Profile", {
+      screen: "LogoutConfirm",
+    });
   };
 
   return (

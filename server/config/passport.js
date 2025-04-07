@@ -3,13 +3,17 @@ const JwtStrategy = require("passport-jwt").Strategy;
 const ExtractJwt = require("passport-jwt").ExtractJwt;
 const LocalStrategy = require("passport-local").Strategy;
 const bcrypt = require("bcryptjs");
+require("dotenv").config(); // Ensure .env is loaded
 
 const User = require("../models/User");
+
+// Get JWT secret from environment variables or use a default for development
+const JWT_SECRET = process.env.JWT_SECRET || "splitify_development_secret_key";
 
 // JWT strategy options
 const opts = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: process.env.JWT_SECRET,
+  secretOrKey: JWT_SECRET,
 };
 
 // JWT strategy

@@ -1,9 +1,23 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { StyleSheet, View, Text, SafeAreaView } from "react-native";
 import { Button, ButtonPlain } from "../../components";
 import { colors, typography, spacing } from "../../theme/theme";
+import { useNavigation } from "@react-navigation/native";
 
-const WelcomeScreen = ({ navigation }) => {
+const WelcomeScreen = () => {
+  const navigation = useNavigation();
+
+  const handleNavigate = useCallback(
+    (routeName) => {
+      if (navigation && navigation.navigate) {
+        navigation.navigate(routeName);
+      } else {
+        console.warn("Navigation not available");
+      }
+    },
+    [navigation]
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -32,14 +46,14 @@ const WelcomeScreen = ({ navigation }) => {
       <View style={styles.footer}>
         <ButtonPlain
           title="Sign Up"
-          onPress={() => navigation.navigate("SignUp")}
+          onPress={() => handleNavigate("SignUp")}
           style={styles.button}
           fullWidth
         />
 
         <ButtonPlain
           title="Log In"
-          onPress={() => navigation.navigate("Login")}
+          onPress={() => handleNavigate("Login")}
           style={[
             styles.button,
             {

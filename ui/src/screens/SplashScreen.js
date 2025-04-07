@@ -9,12 +9,14 @@ import {
   Dimensions,
 } from "react-native";
 import { colors, typography, spacing } from "../theme/theme";
-import { AuthContext } from "../navigation/RootNavigator";
+import { AuthContext } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
-const SplashScreen = ({ navigation }) => {
+const SplashScreen = () => {
   const { checkAuthState } = useContext(AuthContext);
+  const navigation = useNavigation();
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;

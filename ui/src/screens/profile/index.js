@@ -4,8 +4,8 @@ export { default as NotificationSettingsScreen } from "./NotificationSettingsScr
 export { default as SecurityScreen } from "./SecurityScreen";
 export { default as BillingSubscriptionsScreen } from "./BillingSubscriptionsScreen";
 export { default as LinkedAccountsScreen } from "./LinkedAccountsScreen";
-export { default as DataAnalyticsScreen } from "./DataAnalyticsScreen";
 export { default as AppAppearanceScreen } from "./AppAppearanceScreen";
 export { default as ThemeScreen } from "./ThemeScreen";
 export { default as AppLanguageScreen } from "./AppLanguageScreen";
+export { default as DataAnalyticsScreen } from "./DataAnalyticsScreen";
 export { default as LogoutConfirmScreen } from "./LogoutConfirmScreen";
