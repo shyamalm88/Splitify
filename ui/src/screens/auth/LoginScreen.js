@@ -6,15 +6,19 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Button, ButtonPlain, TextField, Header } from "../../components";
 import { colors, typography, spacing } from "../../theme/theme";
 import { AuthContext } from "../../navigation/RootNavigator";
+import { phoneAuth } from "../../config/firebase";
 
 const LoginScreen = ({ navigation }) => {
   const { signIn } = useContext(AuthContext);
   const [phoneNumber, setPhoneNumber] = useState("");
   const [phoneNumberError, setPhoneNumberError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const validatePhoneNumber = (number) => {
     // Simple validation for phone number
@@ -29,10 +33,37 @@ const LoginScreen = ({ navigation }) => {
     return true;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (validatePhoneNumber(phoneNumber)) {
-      // Navigate to OTP screen with the phone number
-      navigation.navigate("OTPVerification", { phoneNumber });
+      try {
+        setLoading(true);
+
+        // Format phone number with country code (using +1 for US)
+        const formattedPhone = `+1${phoneNumber.replace(/\D/g, "")}`;
+
+        // Send verification code
+        const result = await phoneAuth.sendVerificationCode(formattedPhone);
+
+        setLoading(false);
+
+        if (result.success) {
+          // Navigate to OTP screen with the phone number and confirmation result
+          navigation.navigate("OTPVerification", {
+            phoneNumber: formattedPhone,
+            confirmation: result.confirmation,
+          });
+        } else {
+          Alert.alert(
+            "Error",
+            result.error ||
+              "Failed to send verification code. Please try again."
+          );
+        }
+      } catch (error) {
+        setLoading(false);
+        Alert.alert("Error", "Something went wrong. Please try again later.");
+        console.error("Login error:", error);
+      }
     }
   };
 
@@ -62,15 +93,27 @@ const LoginScreen = ({ navigation }) => {
               onChangeText={setPhoneNumber}
               error={phoneNumberError}
               keyboardType="phone-pad"
+              disabled={loading}
             />
           </View>
 
-          <ButtonPlain
-            title="Continue"
-            onPress={handleLogin}
-            fullWidth
-            style={styles.button}
-          />
+          {/* Invisible reCAPTCHA container for Firebase Web Auth */}
+          <View id="recaptcha-container" style={styles.recaptchaContainer} />
+
+          {loading ? (
+            <ActivityIndicator
+              size="large"
+              color={colors.primary}
+              style={styles.loader}
+            />
+          ) : (
+            <ButtonPlain
+              title="Continue"
+              onPress={handleLogin}
+              fullWidth
+              style={styles.button}
+            />
+          )}
 
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>
@@ -133,6 +176,13 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     color: colors.primary,
     fontWeight: typography.fontWeight.semibold,
+  },
+  loader: {
+    marginBottom: spacing.xl,
+  },
+  recaptchaContainer: {
+    height: 0,
+    width: 0,
   },
 });
 

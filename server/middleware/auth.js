@@ -1,20 +1,58 @@
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
+const User = require("../models/User");
 
 // Middleware to authenticate with JWT
-exports.authenticateJWT = (req, res, next) => {
-  passport.authenticate("jwt", { session: false }, (err, user, info) => {
-    if (err) {
-      return next(err);
+exports.authenticateJWT = async (req, res, next) => {
+  // Get token from header
+  const authHeader = req.header("Authorization");
+
+  // Check if no token
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({
+      success: false,
+      message: "No token, authorization denied",
+    });
+  }
+
+  // Extract token
+  const token = authHeader.split(" ")[1];
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "your-jwt-secret-key"
+    );
+
+    // Add user ID from payload to request object
+    req.user = decoded;
+
+    // Check if user still exists in database
+    const userExists = await User.exists({ _id: decoded.id });
+    if (!userExists) {
+      return res.status(401).json({
+        success: false,
+        message: "User no longer exists",
+      });
     }
 
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized access" });
-    }
-
-    req.user = user;
     next();
-  })(req, res, next);
+  } catch (error) {
+    // Check if token is expired
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        success: false,
+        message: "Token has expired",
+      });
+    }
+
+    console.error("Authentication error:", error);
+    return res.status(401).json({
+      success: false,
+      message: "Invalid token",
+    });
+  }
 };
 
 // Middleware to authenticate with local strategy
@@ -49,5 +87,43 @@ exports.validateToken = (req, res, next) => {
     next();
   } catch (err) {
     res.status(401).json({ message: "Token is not valid" });
+  }
+};
+
+/**
+ * Middleware to check if user has admin role
+ *
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+exports.isAdmin = async (req, res, next) => {
+  try {
+    // First ensure user is authenticated
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authenticated",
+      });
+    }
+
+    // Find user in database
+    const user = await User.findById(req.user.id);
+
+    // Check if user exists and has admin role
+    if (!user || user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied, admin privileges required",
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error("Admin check error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during authorization",
+    });
   }
 };

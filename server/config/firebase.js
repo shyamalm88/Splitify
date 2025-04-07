@@ -40,6 +40,18 @@ const initializeFirebaseAdmin = () => {
 
 initializeFirebaseAdmin();
 
+// Development mode OTP codes - only used in dev mode
+const DEV_MODE_OTP_MAP = {
+  "+11234567890": "123456", // Test US number
+  "+12025550134": "123456", // Another test US number
+  "+919876543210": "123456", // Test India number
+};
+
+// Check if we're in development mode
+const isDevelopmentMode = () => {
+  return process.env.NODE_ENV === "development";
+};
+
 module.exports = {
   admin,
 
@@ -54,6 +66,125 @@ module.exports = {
       };
     } catch (error) {
       console.error("Error verifying Firebase ID token:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Send OTP verification code
+  sendOTP: async (phoneNumber) => {
+    try {
+      if (!phoneNumber) {
+        throw new Error("Phone number is required");
+      }
+
+      // Format phone number if needed
+      const formattedPhone = phoneNumber.startsWith("+")
+        ? phoneNumber
+        : `+${phoneNumber}`;
+
+      // In development mode, we just simulate sending an OTP
+      if (isDevelopmentMode()) {
+        console.log(`[DEV MODE] Simulating OTP send to ${formattedPhone}`);
+
+        // Generate a session ID for this verification attempt
+        const sessionId = `dev-session-${Date.now()}-${Math.random()
+          .toString(36)
+          .substring(2, 15)}`;
+
+        return {
+          success: true,
+          sessionInfo: sessionId,
+          inDevMode: true,
+        };
+      }
+
+      // In production, use Firebase Authentication to send the OTP
+      // Note: This requires setting up Firebase Auth with a phone provider
+      const sessionInfo = await admin.auth().createSessionCookie(
+        formattedPhone,
+        { expiresIn: 60 * 5 * 1000 } // 5 minutes
+      );
+
+      return {
+        success: true,
+        sessionInfo,
+      };
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Verify OTP code
+  verifyOTP: async (phoneNumber, code, sessionInfo) => {
+    try {
+      if (!phoneNumber || !code || !sessionInfo) {
+        throw new Error("Phone number, code and session info are required");
+      }
+
+      // Format phone number if needed
+      const formattedPhone = phoneNumber.startsWith("+")
+        ? phoneNumber
+        : `+${phoneNumber}`;
+
+      // In development mode, check against our predefined OTPs
+      if (isDevelopmentMode()) {
+        console.log(`[DEV MODE] Verifying OTP for ${formattedPhone}: ${code}`);
+
+        // Check if session is valid (simple check in dev mode)
+        if (!sessionInfo.startsWith("dev-session-")) {
+          throw new Error("Invalid session");
+        }
+
+        // Check if the OTP matches our dev mode map
+        const expectedOtp = DEV_MODE_OTP_MAP[formattedPhone];
+        if (!expectedOtp) {
+          throw new Error("Phone number not found in development OTP map");
+        }
+
+        if (code !== expectedOtp) {
+          throw new Error("Invalid OTP code");
+        }
+
+        // Find or create a user with this phone number
+        let userRecord;
+        try {
+          userRecord = await admin.auth().getUserByPhoneNumber(formattedPhone);
+        } catch (error) {
+          // User doesn't exist, create a new one
+          if (error.code === "auth/user-not-found") {
+            userRecord = await admin.auth().createUser({
+              phoneNumber: formattedPhone,
+            });
+          } else {
+            throw error;
+          }
+        }
+
+        // Create a custom token for the user
+        const customToken = await admin
+          .auth()
+          .createCustomToken(userRecord.uid);
+
+        return {
+          success: true,
+          uid: userRecord.uid,
+          phoneNumber: formattedPhone,
+          token: customToken,
+          inDevMode: true,
+        };
+      }
+
+      // In production, verify the OTP through Firebase Auth
+      // This would typically be handled client-side with Firebase SDK
+      // Here we would just verify the token they send us after verification
+
+      // For now, just return a placeholder error
+      throw new Error(
+        "Production OTP verification should be handled by Firebase client SDK"
+      );
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
       return { success: false, error: error.message };
     }
   },

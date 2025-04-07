@@ -2,111 +2,244 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 const User = require("../models/User");
+const { validateEmail, validatePassword } = require("../utils/validation");
 
-// @desc    Register new user
-// @route   POST /api/users/register
+// @desc    Register a new user
+// @route   POST /api/auth/register
 // @access  Public
 exports.registerUser = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { username, email, password } = req.body;
-
   try {
-    // Check if user already exists
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ message: "User already exists" });
+    const { username, email, password } = req.body;
+
+    // Validate required fields
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide username, email, and password",
+      });
     }
 
-    user = new User({
+    // Validate email format
+    if (!validateEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address",
+      });
+    }
+
+    // Validate password strength
+    if (!validatePassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 8 characters with letters and numbers",
+      });
+    }
+
+    // Check if user already exists
+    const existingUserByEmail = await User.findOne({ email });
+    if (existingUserByEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is already registered",
+      });
+    }
+
+    const existingUserByUsername = await User.findOne({ username });
+    if (existingUserByUsername) {
+      return res.status(400).json({
+        success: false,
+        message: "Username is already taken",
+      });
+    }
+
+    // Create new user
+    const user = new User({
       username,
       email,
       password,
     });
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-
     await user.save();
 
-    // Generate JWT
-    const payload = {
-      id: user.id,
-    };
-
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" },
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET || "your-jwt-secret-key",
+      { expiresIn: "30d" }
     );
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+
+    // Return user data without password
+    return res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+      },
+      message: "User registered successfully",
+    });
+  } catch (error) {
+    console.error("Registration error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during registration",
+    });
   }
 };
 
-// @desc    Login user
-// @route   POST /api/users/login
+// @desc    Login user with email and password
+// @route   POST /api/auth/login
 // @access  Public
 exports.loginUser = async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
-  }
-
-  const { email, password } = req.body;
-
   try {
+    const { email, password } = req.body;
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide email and password",
+      });
+    }
+
     // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
+    // Check if password matches
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid credentials",
+      });
     }
 
-    // Generate JWT
-    const payload = {
-      id: user.id,
-    };
+    // Update last login timestamp
+    user.lastLogin = Date.now();
+    await user.save();
 
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" },
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: user._id },
+      process.env.JWT_SECRET || "your-jwt-secret-key",
+      { expiresIn: "30d" }
     );
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+
+    // Return user data without password
+    return res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        isPhoneVerified: user.isPhoneVerified,
+      },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error during login",
+    });
   }
 };
 
-// @desc    Get current user
+// @desc    Get current user profile
 // @route   GET /api/users/me
 // @access  Private
 exports.getCurrentUser = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
-    res.json(user);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send("Server Error");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: user.getProfile(),
+    });
+  } catch (error) {
+    console.error("Get current user error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching user data",
+    });
+  }
+};
+
+// @desc    Update user profile
+// @route   PUT /api/users/me
+// @access  Private
+exports.updateProfile = async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    const updates = {};
+
+    // Check which fields to update
+    if (username) updates.username = username;
+    if (email) updates.email = email;
+
+    // Check if the new username is already taken
+    if (username) {
+      const existingUser = await User.findOne({ username });
+      if (existingUser && existingUser._id.toString() !== req.user.id) {
+        return res.status(400).json({
+          success: false,
+          message: "Username is already taken",
+        });
+      }
+    }
+
+    // Check if the new email is already registered
+    if (email) {
+      const existingUser = await User.findOne({ email });
+      if (existingUser && existingUser._id.toString() !== req.user.id) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is already registered",
+        });
+      }
+    }
+
+    // Update the user
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: updates },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user: user.getProfile(),
+      message: "Profile updated successfully",
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while updating profile",
+    });
   }
 };
 
