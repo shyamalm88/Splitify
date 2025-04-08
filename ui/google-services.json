@@ -1,0 +1,29 @@
+{
+    "project_info": {
+        "project_number": "1056124364476",
+        "project_id": "splitify-cd256",
+        "storage_bucket": "splitify-cd256.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:1234567890:android:321abc456def7890",
+                "android_client_info": {
+                    "package_name": "com.shyamalm88.UI_expo"
+                }
+            },
+            "oauth_client": [],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyC1xLhbGBeg7pCJNM-ON5aMCT_1RY5560I"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": []
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

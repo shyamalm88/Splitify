@@ -3,40 +3,88 @@ const router = express.Router();
 const notificationController = require("../controllers/notificationController");
 const auth = require("../middleware/auth");
 
-// @route   POST /api/notifications/register-token
-// @desc    Register device token for push notifications
-// @access  Private
+// Public routes (if any)
+
+// Private routes - user
+router.post(
+  "/register-device",
+  auth.authenticateJWT,
+  notificationController.registerDeviceToken
+);
+
+router.post(
+  "/subscribe-topic",
+  auth.authenticateJWT,
+  notificationController.subscribeToTopic
+);
+
+router.post(
+  "/unsubscribe-topic",
+  auth.authenticateJWT,
+  notificationController.unsubscribeFromTopic
+);
+
+router.post(
+  "/send-test",
+  auth.authenticateJWT,
+  notificationController.sendTestNotification
+);
+
+// Admin only routes
+router.post(
+  "/send-multicast",
+  auth.authenticateJWT,
+  auth.isAdmin,
+  notificationController.sendMulticastNotification
+);
+
+// Register a device token
 router.post(
   "/register-token",
   auth.authenticateJWT,
   notificationController.registerDeviceToken
 );
 
-// @route   DELETE /api/notifications/remove-token
-// @desc    Remove device token
-// @access  Private
+// Remove a device token
 router.delete(
   "/remove-token",
   auth.authenticateJWT,
   notificationController.removeDeviceToken
 );
 
-// @route   POST /api/notifications/send
-// @desc    Send push notification to a user
-// @access  Private/Admin
+// Send a notification to a specific user
 router.post(
   "/send",
   auth.authenticateJWT,
   notificationController.sendNotification
 );
 
-// @route   POST /api/notifications/broadcast
-// @desc    Send push notification to all users
-// @access  Private/Admin
+// Send a broadcast notification to all users
 router.post(
   "/broadcast",
   auth.authenticateJWT,
   notificationController.broadcastNotification
+);
+
+// Subscribe to a topic
+router.post(
+  "/subscribe",
+  auth.authenticateJWT,
+  notificationController.subscribeToTopic
+);
+
+// Unsubscribe from a topic
+router.post(
+  "/unsubscribe",
+  auth.authenticateJWT,
+  notificationController.unsubscribeFromTopic
+);
+
+// Test notification route
+router.post(
+  "/test",
+  auth.authenticateJWT,
+  notificationController.sendTestNotification
 );
 
 module.exports = router;
