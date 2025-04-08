@@ -1,203 +1,141 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
   Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
+import { useGroups } from "../../services/groupService";
+import { useFocusEffect } from "@react-navigation/native";
 
 const GroupsScreen = ({ navigation, route }) => {
-  // Check if new group was added (from route params)
-  const [showNewGroupAdded, setShowNewGroupAdded] = useState(
-    route.params?.newGroupAdded || false
+  const { token, user } = useAuth();
+
+  // Use the TanStack Query hook for groups
+  const { data: groups, isLoading, isError, error, refetch } = useGroups(token);
+
+  // Refetch when screen gets focus
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
   );
 
-  // Sample groups data
-  const [groups, setGroups] = useState([
-    {
-      id: "1",
-      name: "Trip to Japan 🇯🇵",
-      members: ["Alexis", "Thomas", "Charlotte", "Augustine", "Allison"],
-      image: null, // In a real app, this would be an image URI
-      totalExpenses: "$352.58",
-      color: "#FFD6A5", // Peach
-    },
-    {
-      id: "2",
-      name: "Dinner Delights",
-      members: ["Florence", "Danny", "Geoffrey"],
-      image: null,
-      totalExpenses: "$125.30",
-      color: "#CAFFBF", // Light green
-    },
-    {
-      id: "3",
-      name: "Expense Explorers",
-      members: ["Alexis", "Charlotte", "Geoffrey", "Danny", "Augustine"],
-      image: null,
-      totalExpenses: "$478.55",
-      color: "#A0C4FF", // Light blue
-    },
-    {
-      id: "4",
-      name: "Road Trip Reckoners",
-      members: ["Thomas", "Alexis", "Charlotte"],
-      image: null,
-      totalExpenses: "$289.75",
-      color: "#FFC6FF", // Light pink
-    },
-    {
-      id: "5",
-      name: "Gadget Group 📱",
-      members: ["Geoffrey", "Augustine", "Danny"],
-      image: null,
-      totalExpenses: "$156.80",
-      color: colors.primaryLight, // Light yellow
-    },
-    {
-      id: "6",
-      name: "Family Vacation 🏖️",
-      members: ["Thomas", "Charlotte", "Alexis"],
-      image: null,
-      totalExpenses: "$935.42",
-      color: "#FFFFFC", // Light yellow
-    },
-    {
-      id: "7",
-      name: "Shopping Buddies",
-      members: ["Florence", "Charlotte", "Allison"],
-      image: null,
-      totalExpenses: "$325.25",
-      color: "#9BF6FF", // Light cyan
-    },
-  ]);
-
-  // Hide the "New Group Added" message after 3 seconds
-  React.useEffect(() => {
-    if (showNewGroupAdded) {
-      const timer = setTimeout(() => {
-        setShowNewGroupAdded(false);
-      }, 3000);
-      return () => clearTimeout(timer);
+  // Handle responses from other screens (like group creation)
+  useEffect(() => {
+    if (route.params?.newGroupAdded) {
+      // We don't need to manually fetch since the cache was already invalidated
+      // Just clear the params to avoid repeated refreshes
+      navigation.setParams({ newGroupAdded: undefined, newGroup: undefined });
     }
-  }, [showNewGroupAdded]);
+  }, [route.params, navigation]);
+
+  const handleCreateGroup = () => {
+    navigation.navigate("NewGroup");
+  };
+
+  const handleGroupPress = (groupId) => {
+    navigation.navigate("GroupDetails", { groupId });
+  };
 
   const renderGroupItem = ({ item }) => {
-    // Function to get icon based on group name
-    const getGroupIcon = (groupName) => {
-      const name = groupName.toLowerCase();
-      if (name.includes("trip") || name.includes("vacation")) {
-        return "flight";
-      } else if (name.includes("dinner") || name.includes("food")) {
-        return "restaurant";
-      } else if (name.includes("gadget")) {
-        return "devices";
-      } else if (name.includes("shopping")) {
-        return "shopping-bag";
-      } else if (name.includes("road")) {
-        return "directions-car";
-      } else {
-        return "group";
-      }
-    };
-
     return (
       <TouchableOpacity
         style={styles.groupItem}
-        onPress={() => navigation.navigate("GroupDetail", { groupId: item.id })}
+        onPress={() => handleGroupPress(item._id)}
       >
-        <View style={styles.groupImageContainer}>
-          {item.image ? (
-            <Image
-              source={{ uri: item.image }}
-              style={styles.groupImage}
-              onError={() => {
-                console.log(`Failed to load image for group: ${item.id}`);
-                // Don't update state here - it causes infinite loops
-              }}
-            />
-          ) : (
-            <View
-              style={[styles.placeholderImage, { backgroundColor: item.color }]}
-            >
-              <MaterialIcons
-                name={getGroupIcon(item.name)}
-                size={24}
-                color={colors.gray800}
-              />
-            </View>
-          )}
-        </View>
-        <View style={styles.groupInfo}>
+        {/* Group Image Thumbnail */}
+        <Text>{JSON.stringify(item)}</Text>
+        {item.imageUrl ? (
+          <Image source={{ uri: item.imageUrl }} style={styles.groupImage} />
+        ) : (
+          <View style={styles.groupInitialContainer}>
+            <Text style={styles.groupInitial}>{item.name.charAt(0)}</Text>
+          </View>
+        )}
+
+        {/* Group Details */}
+        <View style={styles.groupDetails}>
           <Text style={styles.groupName}>{item.name}</Text>
           <Text style={styles.groupMembers}>
-            {item.members.slice(0, 3).join(", ")}
-            {item.members.length > 3 ? ` +${item.members.length - 3} more` : ""}
+            {item.participants.length}{" "}
+            {item.participants.length === 1 ? "member" : "members"}
           </Text>
         </View>
+
+        {/* Chevron Icon */}
         <MaterialIcons name="chevron-right" size={24} color={colors.gray400} />
       </TouchableOpacity>
     );
   };
 
-  // Empty state component
-  const EmptyGroupsState = () => (
-    <View style={styles.emptyContainer}>
-      <View style={styles.emptyImagePlaceholder}>
-        <MaterialIcons name="group-add" size={64} color={colors.gray400} />
-      </View>
-      <Text style={styles.emptyTitle}>Empty</Text>
-      <Text style={styles.emptySubtitle}>You haven't created a group yet</Text>
-      <TouchableOpacity
-        style={styles.createButtonLarge}
-        onPress={() => navigation.navigate("NewGroup")}
-      >
-        <Text style={styles.createButtonText}>Create a New Group</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading groups...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <MaterialIcons name="error-outline" size={48} color={colors.error} />
+        <Text style={styles.errorText}>
+          Error loading groups: {error?.message || "Unknown error"}
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["right", "left", "top"]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Groups</Text>
-        <TouchableOpacity onPress={() => {}}>
-          <MaterialIcons name="more-vert" size={24} color={colors.black} />
-        </TouchableOpacity>
       </View>
 
-      {/* New Group Added Toast */}
-      {showNewGroupAdded && (
-        <View style={styles.toastContainer}>
-          <Text style={styles.toastText}>New Group Added!</Text>
-        </View>
-      )}
-
-      {/* Group List or Empty State */}
-      {groups.length > 0 ? (
+      {/* Groups List */}
+      {groups && groups.length > 0 ? (
         <FlatList
           data={groups}
           renderItem={renderGroupItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.groupList}
+          keyExtractor={(item) => item._id}
+          contentContainerStyle={styles.groupsList}
+          refreshing={isLoading}
+          onRefresh={refetch}
         />
       ) : (
-        <EmptyGroupsState />
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="group" size={64} color={colors.gray300} />
+          <Text style={styles.emptyText}>No groups yet</Text>
+          <Text style={styles.emptySubtext}>
+            Create a group to start tracking expenses with friends
+          </Text>
+          <TouchableOpacity
+            style={styles.createFirstButton}
+            onPress={handleCreateGroup}
+          >
+            <Text style={styles.createFirstButtonText}>Create First Group</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
-      {/* Create Group FAB (only shown when groups exist) */}
-      {groups.length > 0 && (
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("NewGroup")}
-        >
-          <MaterialIcons name="add" size={24} color={colors.black} />
+      {/* Floating Action Button (FAB) */}
+      {groups && groups.length > 0 && (
+        <TouchableOpacity style={styles.fab} onPress={handleCreateGroup}>
+          <MaterialIcons name="add" size={24} color={colors.white} />
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -246,16 +184,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
   },
-  groupImageContainer: {
+  groupImage: {
     width: 50,
     height: 50,
     borderRadius: 8,
-    overflow: "hidden",
     marginRight: spacing.md,
-  },
-  groupImage: {
-    width: "100%",
-    height: "100%",
   },
   placeholderImage: {
     width: "100%",
@@ -321,6 +254,101 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight.medium,
   },
   addButton: {
+    position: "absolute",
+    right: spacing.lg,
+    bottom: spacing.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 4,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.white,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray600,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  errorText: {
+    color: colors.error,
+    marginBottom: spacing.md,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.full,
+  },
+  retryButtonText: {
+    color: colors.black,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+  },
+  groupsList: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  groupInitialContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: colors.gray200,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: spacing.md,
+  },
+  groupInitial: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray800,
+  },
+  groupDetails: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  createButton: {
+    padding: spacing.md,
+  },
+  createFirstButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+  },
+  createFirstButtonText: {
+    color: colors.black,
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+  },
+  emptyText: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    color: colors.gray900,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    fontSize: typography.fontSize.md,
+    color: colors.gray600,
+    textAlign: "center",
+    marginBottom: spacing.xl,
+  },
+  fab: {
     position: "absolute",
     right: spacing.lg,
     bottom: spacing.lg,

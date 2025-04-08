@@ -1,6 +1,7 @@
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const mongoose = require("mongoose");
 
 // Middleware to authenticate with JWT
 exports.authenticateJWT = async (req, res, next) => {
@@ -23,9 +24,14 @@ exports.authenticateJWT = async (req, res, next) => {
     if (token.startsWith("dev_")) {
       const [prefix, userId, timestamp] = token.split("_");
       if (prefix === "dev" && userId && timestamp) {
-        // For development tokens, we'll create a mock user
+        // For development tokens, we'll create a mock user with a valid ObjectId
+        // Use a consistent ObjectId based on the userId for development
+        const validObjectId = mongoose.Types.ObjectId.createFromHexString(
+          "5f9f1b9b9c9d1b9b9c9d1b9b" // Using a valid 24-character hex string
+        );
+
         req.user = {
-          id: userId,
+          id: validObjectId.toString(),
           deviceTokens: [], // Initialize empty device tokens array
         };
         return next();
@@ -67,6 +73,9 @@ exports.authenticateJWT = async (req, res, next) => {
     });
   }
 };
+
+// Export auth as alias for authenticateJWT for backward compatibility
+exports.auth = exports.authenticateJWT;
 
 // Middleware to authenticate with local strategy
 exports.authenticateLocal = (req, res, next) => {

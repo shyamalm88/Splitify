@@ -13,6 +13,7 @@ const initializeFirebaseAdmin = () => {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
+          storageBucket: "splitify-app.appspot.com", // Add storage bucket name
           messaging: {
             vapidKey:
               "BAy7oap_tw_ewQqkQJISkP6rPav_XhxFTuEu2lBsmyhfdbMJfzqm5n6eJwXYri3YY3xBYaGib8V9yz_ATw02uPM", // Web Push certification key
@@ -39,6 +40,7 @@ const initializeFirebaseAdmin = () => {
           const serviceAccount = require(serviceAccountPath);
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
+            storageBucket: "splitify-app.appspot.com", // Add storage bucket name
             messaging: {
               vapidKey:
                 "BAy7oap_tw_ewQqkQJISkP6rPav_XhxFTuEu2lBsmyhfdbMJfzqm5n6eJwXYri3YY3xBYaGib8V9yz_ATw02uPM", // Web Push certification key

@@ -1,66 +1,129 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
   Text,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
+import { useCreateGroup, useUpdateGroup } from "../../services/groupService";
 
 const SelectParticipantsScreen = ({ navigation, route }) => {
-  const groupData = route.params;
+  const groupData = route.params || {};
+  const { token, user, isAuthenticated } = useAuth();
+  const [contactsData, setContactsData] = useState([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [authError, setAuthError] = useState(false);
 
-  // Sample contacts data (in a real app, this would be fetched from the API or redux store)
-  const contactsData = [
-    {
-      id: "1",
-      name: "Alexis Hershey",
-      email: "alexis.hershey@gmail.com",
-      avatar: null, // This would be a URL in a real app
-    },
-    {
-      id: "2",
-      name: "Allison Schroeder",
-      email: "allison.schro@gmail.com",
-      avatar: null,
-    },
-    {
-      id: "3",
-      name: "Augustine Nguyen",
-      email: "augustine.n@gmail.com",
-      avatar: null,
-    },
-    {
-      id: "4",
-      name: "Charlotte Hanlin",
-      email: "charlotte.hanlin@gmail.com",
-      avatar: null,
-    },
-    {
-      id: "5",
-      name: "Danny Schekowski",
-      email: "danny.sch@gmail.com",
-      avatar: null,
-    },
-    {
-      id: "6",
-      name: "Florence Dominca",
-      email: "florence.d@gmail.com",
-      avatar: null,
-    },
-    {
-      id: "7",
-      name: "Geoffrey Nott",
-      email: "geoffrey.nott@gmail.com",
-      avatar: null,
-    },
-  ];
+  // Determine if we're adding to an existing group or creating a new one
+  const isExistingGroup = !!groupData.groupId;
+
+  // Use the create group mutation
+  const createGroupMutation = useCreateGroup();
+  // Use the update group mutation
+  const updateGroupMutation = useUpdateGroup();
+
+  const isProcessing =
+    createGroupMutation.isPending || updateGroupMutation.isPending;
+
+  // Debug route params
+  useEffect(() => {
+    console.log("Group data from route params:", groupData);
+    console.log("Is existing group:", isExistingGroup);
+  }, [groupData, isExistingGroup]);
+
+  // Check if user is authenticated
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      setAuthError(true);
+      Alert.alert(
+        "Authentication Required",
+        "Please log in to create a group",
+        [
+          {
+            text: "OK",
+            onPress: () => navigation.navigate("Login"),
+          },
+        ]
+      );
+    }
+  }, [isAuthenticated, navigation]);
 
   // State to keep track of selected contacts
   const [selectedContacts, setSelectedContacts] = useState([]);
+
+  // Fetch contacts from the API
+  useEffect(() => {
+    const fetchContacts = async () => {
+      setIsLoadingContacts(true);
+      try {
+        // In a real app, this would be a call to get user contacts
+        // For now, we'll use sample data
+        const sampleContacts = [
+          {
+            id: "1",
+            name: "Alexis Hershey",
+            email: "alexis.hershey@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "2",
+            name: "Allison Schroeder",
+            email: "allison.schro@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "3",
+            name: "Augustine Nguyen",
+            email: "augustine.n@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "4",
+            name: "Charlotte Hanlin",
+            email: "charlotte.hanlin@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "5",
+            name: "Danny Schekowski",
+            email: "danny.sch@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "6",
+            name: "Florence Dominca",
+            email: "florence.d@gmail.com",
+            avatar: null,
+          },
+          {
+            id: "7",
+            name: "Geoffrey Nott",
+            email: "geoffrey.nott@gmail.com",
+            avatar: null,
+          },
+        ];
+
+        // Simulate API call
+        setTimeout(() => {
+          setContactsData(sampleContacts);
+          setIsLoadingContacts(false);
+        }, 500);
+      } catch (error) {
+        console.error("Error fetching contacts:", error);
+        setIsLoadingContacts(false);
+        Alert.alert("Error", "Failed to load contacts. Please try again.");
+      }
+    };
+
+    fetchContacts();
+  }, []);
 
   const toggleContactSelection = (contactId) => {
     if (selectedContacts.includes(contactId)) {
@@ -74,23 +137,135 @@ const SelectParticipantsScreen = ({ navigation, route }) => {
     navigation.goBack();
   };
 
-  const handleCreateGroup = () => {
-    // Create a new group with selected contacts
-    const newGroup = {
-      ...groupData,
-      members: selectedContacts.map((id) => {
-        const contact = contactsData.find((c) => c.id === id);
-        return {
-          id: contact.id,
-          name: contact.name,
-          email: contact.email,
-        };
-      }),
-      id: Date.now().toString(), // Generate a unique ID for the group
-    };
+  const handleSaveParticipants = async () => {
+    // Check authentication before proceeding
+    if (!isAuthenticated()) {
+      Alert.alert("Authentication Required", "Please log in to continue", [
+        {
+          text: "OK",
+          onPress: () => navigation.navigate("Login"),
+        },
+      ]);
+      return;
+    }
 
-    // Navigate back to groups screen with new group info
-    navigation.navigate("Groups", { newGroup, newGroupAdded: true });
+    // Validate if this is a new group creation
+    if (!isExistingGroup && (!groupData || !groupData.groupName)) {
+      Alert.alert("Error", "Group name is required");
+      return;
+    }
+
+    // Get the mock MongoDB ObjectId for development
+    const devObjectId = "5f9f1b9b9c9d1b9b9c9d1b9b";
+
+    try {
+      if (isExistingGroup) {
+        // Adding participants to existing group
+        console.log(
+          `Adding participants to existing group: ${groupData.groupId}`
+        );
+
+        // Prepare participants data for API
+        const participantsPayload = {
+          participants: selectedContacts.map((contactId) => devObjectId),
+          paidBy: user ? user.id : devObjectId, // Use devObjectId as fallback if user is undefined
+        };
+
+        // Use the mutation to update group
+        updateGroupMutation.mutate(
+          {
+            token,
+            groupId: groupData.groupId,
+            groupData: participantsPayload,
+          },
+          {
+            onSuccess: (updatedGroup) => {
+              console.log("Participants added successfully:", updatedGroup);
+              // Navigate back to group details
+              navigation.goBack();
+            },
+            onError: (error) => {
+              console.error("Error adding participants:", error);
+              Alert.alert(
+                "Error",
+                error.response?.data?.message ||
+                  "Failed to add participants. Please try again."
+              );
+            },
+          }
+        );
+      } else {
+        // Creating a new group
+        // Check if image is too large (500KB limit)
+        const imageSizeLimit = 500 * 1024 * 1000; // 500KB in bytes
+        let processedGroupImage = null;
+
+        if (groupData.groupImage) {
+          // Estimate the size of the base64 image (base64 string length * 0.75 is approximate size in bytes)
+          const estimatedImageSize = groupData.groupImage.length * 0.75;
+
+          if (estimatedImageSize > imageSizeLimit) {
+            console.warn(
+              `Image is too large (${Math.round(estimatedImageSize / 1024)}KB). Skipping image upload.`
+            );
+            // Optionally show an alert about the image being too large
+            Alert.alert(
+              "Warning",
+              "The selected image is too large and will not be uploaded. The group will be created without an image.",
+              [{ text: "Continue Anyway" }]
+            );
+          } else {
+            processedGroupImage = groupData.groupImage;
+          }
+        }
+
+        // Prepare data for API with default values for missing fields
+        const groupPayload = {
+          name: groupData.groupName,
+          description: groupData.description || "",
+          currency: groupData.currency || "INR",
+          categories: groupData.categories || [],
+          // For dev mode, use consistent ObjectIds
+          participants: selectedContacts.map((contactId) => devObjectId),
+          paidBy: user ? user.id : devObjectId, // Use devObjectId as fallback if user is undefined
+          // Only include image if it's processed and not too large
+          ...(processedGroupImage ? { groupImage: processedGroupImage } : {}),
+        };
+
+        console.log("Sending group payload:", {
+          ...groupPayload,
+          groupImage: processedGroupImage
+            ? `[Base64 image: ${Math.round((processedGroupImage.length * 0.75) / 1024)}KB]`
+            : undefined,
+        });
+
+        // Use the mutation to create group
+        createGroupMutation.mutate(
+          { token, groupData: groupPayload },
+          {
+            onSuccess: (newGroup) => {
+              console.log("Group created successfully:", newGroup);
+              // Navigate to success screen
+              navigation.navigate("GroupCreationSuccess", { group: newGroup });
+            },
+            onError: (error) => {
+              console.error("Error creating group:", error);
+              Alert.alert(
+                "Error",
+                error.response?.data?.message ||
+                  "Failed to create group. Please try again."
+              );
+            },
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error processing group operation:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message || "Operation failed. Please try again."
+      );
+    }
   };
 
   const renderContactItem = ({ item }) => {
@@ -144,30 +319,49 @@ const SelectParticipantsScreen = ({ navigation, route }) => {
         </Text>
       </View>
 
-      {/* Contacts List */}
-      <FlatList
-        data={contactsData}
-        renderItem={renderContactItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.contactsList}
-      />
+      {isLoadingContacts ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading contacts...</Text>
+        </View>
+      ) : (
+        <>
+          {/* Contacts List */}
+          <FlatList
+            data={contactsData}
+            renderItem={renderContactItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.contactsList}
+          />
 
-      {/* Bottom Buttons */}
-      <View style={styles.bottomButtons}>
-        <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.createButton,
-            selectedContacts.length === 0 && styles.disabledButton,
-          ]}
-          onPress={handleCreateGroup}
-          disabled={selectedContacts.length === 0}
-        >
-          <Text style={styles.createButtonText}>Create</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Bottom Buttons */}
+          <View style={styles.bottomButtons}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancel}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.createButton,
+                (selectedContacts.length === 0 || isProcessing) &&
+                  styles.disabledButton,
+              ]}
+              onPress={handleSaveParticipants}
+              disabled={selectedContacts.length === 0 || isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color={colors.black} />
+              ) : (
+                <Text style={styles.createButtonText}>
+                  {isExistingGroup ? "Add to Group" : "Create Group"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 };
@@ -281,6 +475,16 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     color: colors.black,
     fontWeight: typography.fontWeight.medium,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray600,
   },
 });
 

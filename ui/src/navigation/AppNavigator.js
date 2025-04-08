@@ -38,7 +38,10 @@ import {
   DeleteGroupConfirmScreen,
   SelectCategoryScreen,
   RequestPaymentScreen,
+  GroupSettingsScreen,
   ActivityScreen,
+  GroupCreationSuccessScreen,
+  SelectPayerScreen,
 } from "../screens";
 import { TabBar } from "../components";
 import { colors } from "../theme/theme";
@@ -90,7 +93,15 @@ const GroupsStackNavigator = () => {
         name="SelectParticipants"
         component={SelectParticipantsScreen}
       />
-      <GroupsStack.Screen name="GroupDetail" component={GroupDetailScreen} />
+      <GroupsStack.Screen
+        name="GroupCreationSuccess"
+        component={GroupCreationSuccessScreen}
+      />
+      <GroupsStack.Screen name="GroupDetails" component={GroupDetailScreen} />
+      <GroupsStack.Screen
+        name="GroupSettings"
+        component={GroupSettingsScreen}
+      />
       <GroupsStack.Screen name="AddExpense" component={AddGroupExpenseScreen} />
       <GroupsStack.Screen name="SplitBy" component={SplitByScreen} />
       <GroupsStack.Screen name="EditGroup" component={EditGroupScreen} />
@@ -98,6 +109,7 @@ const GroupsStackNavigator = () => {
         name="SelectCategory"
         component={SelectCategoryScreen}
       />
+      <GroupsStack.Screen name="SelectPayer" component={SelectPayerScreen} />
       <GroupsStack.Screen
         name="ExpenseDetails"
         component={ExpenseDetailsScreen}

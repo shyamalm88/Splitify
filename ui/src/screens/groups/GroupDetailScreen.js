@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -7,161 +7,203 @@ import {
   FlatList,
   Image,
   ScrollView,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
+import { useGroup } from "../../services/groupService";
+import {
+  useCreateExpense,
+  useUpdateExpense,
+  useDeleteExpense,
+} from "../../services/expenseService";
+import { useFocusEffect } from "@react-navigation/native";
 
 const GroupDetailScreen = ({ navigation, route }) => {
   const { groupId } = route.params;
+  const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState("expenses");
-  const [group, setGroup] = useState(null);
 
-  // Mock data for the group based on the groupId
-  useEffect(() => {
-    // In a real app, this would be a fetch from an API or Redux store
-    const mockGroup = {
-      id: "1",
-      name: "Trip to Japan 🇯🇵",
-      description: "Vacationing with college friends in Japan",
-      currency: "USD",
-      totalExpenses: "$2,348.60",
-      balanceTotal: "$5,739.23",
-      totalGroupSpending: "$3,648.50",
-      totalPaid: "$1,759.25",
-      yourTotalShare: "$608.08",
-      image: null,
-      members: [
-        {
-          id: "1",
-          name: "Andrew Ainsley (You)",
-          email: "andrew@example.com",
-          balance: "+$442.50",
-          avatarColor: "#FFD6A5", // Peach
-          icon: "person",
-          owes: [
-            { id: "3", name: "Darren Kulikowski", amount: "$728.50" },
-            { id: "4", name: "Charlotte Hanlin", amount: "$586.50" },
-          ],
-        },
-        {
-          id: "2",
-          name: "Charlotte Hanlin",
-          email: "charlotte.hanlin@gmail.com",
-          balance: "-$728.50",
-          avatarColor: "#FFC6FF", // Light pink
-          icon: "face",
-        },
-        {
-          id: "3",
-          name: "Darren Kulikowski",
-          email: "darren.kulikowski@gmail.com",
-          balance: "-$586.50",
-          avatarColor: "#A0C4FF", // Light blue
-          icon: "person",
-        },
-        {
-          id: "4",
-          name: "Kristin Watson",
-          email: "kristin.watson@gmail.com",
-          balance: "+$586.50",
-          avatarColor: "#CAFFBF", // Light green
-          icon: "face",
-        },
-        {
-          id: "5",
-          name: "Joseph Thomas",
-          email: "joseph.thomas@gmail.com",
-          balance: "+$728.50",
-          avatarColor: "#BDB2FF", // Light purple
-          icon: "person",
-        },
-        {
-          id: "6",
-          name: "Maryland Winkles",
-          email: "maryland.winkles@gmail.com",
-          balance: "-$442.50",
-          avatarColor: "#9BF6FF", // Light cyan
-          icon: "face",
-          owes: [{ id: "1", name: "Andrew Ainsley (You)", amount: "$642.50" }],
-        },
-      ],
-      expenses: [
-        {
-          id: "1",
-          title: "Transportation Costs",
-          amount: "$354.20",
-          date: "May 15, 2023",
-          paidBy: "Andrew Ainsley (You)",
-          category: "Transportation",
-        },
-        {
-          id: "2",
-          title: "Sushi Eating Expenditures",
-          amount: "$85.35",
-          date: "May 16, 2023",
-          paidBy: "Charlotte Hanlin",
-          category: "Food",
-        },
-        {
-          id: "3",
-          title: "Tour to Tokyo Tower",
-          amount: "$128.50",
-          date: "May 17, 2023",
-          paidBy: "Kevin Wilson",
-          category: "Activity",
-        },
-        {
-          id: "4",
-          title: "Shopping for Fashion Items",
-          amount: "$245.75",
-          date: "May 18, 2023",
-          paidBy: "Darren Kahminski",
-          category: "Shopping",
-        },
-        {
-          id: "5",
-          title: "Buying Japanese Groceries",
-          amount: "$52.40",
-          date: "May 19, 2023",
-          paidBy: "Joseph Thames",
-          category: "Groceries",
-        },
-        {
-          id: "6",
-          title: "Cost of Staying at Hotel",
-          amount: "$953.25",
-          date: "May 20, 2023",
-          paidBy: "Andrew Ainsley (You)",
-          category: "Accommodation",
-        },
-        {
-          id: "7",
-          title: "Supermarket Shopping",
-          amount: "$76.50",
-          date: "May 21, 2023",
-          paidBy: "Charlotte Hanlin",
-          category: "Groceries",
-        },
-        {
-          id: "8",
-          title: "Airline Ticket Cost",
-          amount: "$452.65",
-          date: "May 22, 2023",
-          paidBy: "Kevin Wilson",
-          category: "Transportation",
-        },
-      ],
+  // Use TanStack Query to fetch and cache the group data
+  const {
+    data: groupData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGroup(token, groupId);
+
+  // Add expense mutation hooks
+  const createExpenseMutation = useCreateExpense();
+  const updateExpenseMutation = useUpdateExpense();
+  const deleteExpenseMutation = useDeleteExpense();
+
+  // Ensure the group data is properly formatted to prevent map/find errors
+  const group = React.useMemo(() => {
+    if (!groupData) return null;
+
+    return {
+      ...groupData,
+      expenses: Array.isArray(groupData.expenses) ? groupData.expenses : [],
+      members: Array.isArray(groupData.members) ? groupData.members : [],
+      // Provide defaults for other fields that might be accessed
+      name: groupData.name || "Unnamed Group",
+      description: groupData.description || "",
+      currency: groupData.currency || "USD",
+      totalGroupSpending: groupData.totalGroupSpending || "$0.00",
+      totalPaid: groupData.totalPaid || "$0.00",
+      yourTotalShare: groupData.yourTotalShare || "$0.00",
     };
+  }, [groupData]);
 
-    setGroup(mockGroup);
-  }, [groupId]);
+  // Refetch when the screen gets focus
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
+  // Handle back navigation
+  const handleBack = () => {
+    navigation.goBack();
+  };
+
+  // Handle adding new expense
+  const handleAddExpense = () => {
+    navigation.navigate("AddExpense", {
+      groupId,
+      onSave: (expenseData) => {
+        createExpenseMutation.mutate(
+          {
+            token,
+            expenseData: {
+              ...expenseData,
+              group: groupId,
+              paidBy: user.id,
+            },
+          },
+          {
+            onSuccess: () => {
+              refetch();
+            },
+            onError: (err) => {
+              Alert.alert(
+                "Error",
+                `Failed to add expense: ${err.message || "Unknown error"}`
+              );
+            },
+          }
+        );
+      },
+    });
+  };
+
+  // Handle editing expense
+  const handleEditExpense = (expense) => {
+    navigation.navigate("EditExpense", {
+      expenseId: expense.id,
+      groupId,
+      expense,
+      onSave: (updatedExpenseData) => {
+        updateExpenseMutation.mutate(
+          {
+            token,
+            expenseId: expense.id,
+            expenseData: {
+              ...updatedExpenseData,
+              group: groupId,
+            },
+          },
+          {
+            onSuccess: () => {
+              refetch();
+            },
+            onError: (err) => {
+              Alert.alert(
+                "Error",
+                `Failed to update expense: ${err.message || "Unknown error"}`
+              );
+            },
+          }
+        );
+      },
+    });
+  };
+
+  // Handle deleting expense
+  const handleDeleteExpense = (expenseId) => {
+    Alert.alert(
+      "Delete Expense",
+      "Are you sure you want to delete this expense?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            deleteExpenseMutation.mutate(
+              {
+                token,
+                expenseId,
+                groupId, // Include groupId to invalidate group queries
+              },
+              {
+                onSuccess: () => {
+                  refetch();
+                },
+                onError: (err) => {
+                  Alert.alert(
+                    "Error",
+                    `Failed to delete expense: ${err.message || "Unknown error"}`
+                  );
+                },
+              }
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  // Display loading state
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading group details...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Display error state
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <MaterialIcons name="error-outline" size={48} color={colors.error} />
+        <Text style={styles.errorText}>
+          Error loading group: {error?.message || "Unknown error"}
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // Make sure we have group data before rendering
   if (!group) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading...</Text>
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading group details...</Text>
+      </SafeAreaView>
     );
   }
 
@@ -169,7 +211,12 @@ const GroupDetailScreen = ({ navigation, route }) => {
     <TouchableOpacity
       style={styles.expenseItem}
       onPress={() =>
-        navigation.navigate("ExpenseDetails", { expenseId: item.id, groupId })
+        navigation.navigate("ExpenseDetails", {
+          expenseId: item.id,
+          groupId,
+          onEdit: () => handleEditExpense(item),
+          onDelete: () => handleDeleteExpense(item.id),
+        })
       }
     >
       <View style={styles.expenseLeft}>
@@ -292,7 +339,7 @@ const GroupDetailScreen = ({ navigation, route }) => {
           </TouchableOpacity>
         </View>
       )}
-      {item.name.includes("(You)") && item.owes && (
+      {item.name.includes("(You)") && item.owes && item.owes.length > 0 && (
         <View style={styles.detailsList}>
           {item.owes.map((owed) => (
             <View key={owed.id} style={styles.oweDetail}>
@@ -414,35 +461,42 @@ const GroupDetailScreen = ({ navigation, route }) => {
           <TouchableOpacity
             style={styles.addMemberButton}
             onPress={() =>
-              navigation.navigate("SelectParticipants", { groupId })
+              navigation.navigate("SelectParticipants", {
+                groupId: groupId,
+                isExisting: true,
+              })
             }
           >
             <Text style={styles.addMemberButtonText}>Add</Text>
           </TouchableOpacity>
         </View>
 
-        {group.members.map((member) => (
-          <View key={member.id} style={styles.memberDetailRow}>
-            <View style={styles.memberDetailLeft}>
-              <View style={styles.memberAvatar}>
-                <Text style={styles.memberInitial}>
-                  {member.name.charAt(0)}
-                </Text>
+        {group.members && group.members.length > 0 ? (
+          group.members.map((member) => (
+            <View key={member.id} style={styles.memberDetailRow}>
+              <View style={styles.memberDetailLeft}>
+                <View style={styles.memberAvatar}>
+                  <Text style={styles.memberInitial}>
+                    {member.name ? member.name.charAt(0) : "?"}
+                  </Text>
+                </View>
+                <View>
+                  <Text style={styles.memberDetailName}>{member.name}</Text>
+                  <Text style={styles.memberDetailEmail}>{member.email}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.memberDetailName}>{member.name}</Text>
-                <Text style={styles.memberDetailEmail}>{member.email}</Text>
-              </View>
+              <TouchableOpacity>
+                <MaterialIcons
+                  name="more-vert"
+                  size={20}
+                  color={colors.gray600}
+                />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity>
-              <MaterialIcons
-                name="more-vert"
-                size={20}
-                color={colors.gray600}
-              />
-            </TouchableOpacity>
-          </View>
-        ))}
+          ))
+        ) : (
+          <Text style={styles.emptyStateText}>No members added yet</Text>
+        )}
       </View>
     </View>
   );
@@ -469,10 +523,7 @@ const GroupDetailScreen = ({ navigation, route }) => {
     <SafeAreaView style={styles.container} edges={["right", "left", "top"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <MaterialIcons name="arrow-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.title}>{group.name}</Text>
@@ -562,17 +613,19 @@ const GroupDetailScreen = ({ navigation, route }) => {
       {activeTab === "expenses" && (
         <View style={styles.tabContent}>
           <FlatList
-            data={group.expenses}
+            data={group.expenses || []}
             renderItem={renderExpenseItem}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.expensesList}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No expenses added yet</Text>
+              </View>
+            }
           />
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => navigation.navigate("AddExpense", { groupId })}
-          >
-            <MaterialIcons name="add" size={24} color={colors.black} />
+          <TouchableOpacity style={styles.addButton} onPress={handleAddExpense}>
+            <MaterialIcons name="add" size={24} color={colors.white} />
           </TouchableOpacity>
         </View>
       )}
@@ -580,11 +633,18 @@ const GroupDetailScreen = ({ navigation, route }) => {
       {activeTab === "balances" && (
         <View style={styles.tabContent}>
           <FlatList
-            data={group.members}
+            data={group.members || []}
             renderItem={renderBalanceItem}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.membersList}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>
+                  No members with balances yet
+                </Text>
+              </View>
+            }
           />
         </View>
       )}
@@ -609,6 +669,37 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: colors.white,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray600,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+  },
+  errorText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray800,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.black,
   },
   header: {
     flexDirection: "row",
@@ -727,8 +818,8 @@ const styles = StyleSheet.create({
   },
   addButton: {
     position: "absolute",
-    right: spacing.lg,
-    bottom: spacing.lg,
+    right: 20,
+    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,
@@ -738,8 +829,8 @@ const styles = StyleSheet.create({
     elevation: 4,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
   },
   membersList: {
     padding: spacing.lg,
@@ -944,6 +1035,17 @@ const styles = StyleSheet.create({
   oweDetailText: {
     fontSize: typography.fontSize.sm,
     color: colors.gray700,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+  },
+  emptyStateText: {
+    fontSize: typography.fontSize.md,
+    color: colors.gray500,
+    textAlign: "center",
   },
 });
 

@@ -7,21 +7,48 @@ import {
   TextInput,
   ScrollView,
   Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
 import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "../../context/AuthContext";
+import { useGroup, useUpdateGroup } from "../../services/groupService";
+import { useFocusEffect } from "@react-navigation/native";
 
 const EditGroupScreen = ({ navigation, route }) => {
   const { groupId } = route.params;
-  const [group, setGroup] = useState(null);
+  const { token } = useAuth();
+
+  // State for form fields
   const [groupName, setGroupName] = useState("");
   const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState("USD");
+  const [currency, setCurrency] = useState("INR");
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [groupImage, setGroupImage] = useState(null);
+  const [base64Image, setBase64Image] = useState(null);
+
+  // Use TanStack Query to fetch group data
+  const {
+    data: group,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useGroup(token, groupId);
+
+  // Use TanStack Query mutation for updating group
+  const updateGroupMutation = useUpdateGroup();
+
+  // Refetch on focus
+  useFocusEffect(
+    React.useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   // Categories that can be selected for a group
   const categories = [
@@ -35,6 +62,7 @@ const EditGroupScreen = ({ navigation, route }) => {
 
   // Currency options
   const currencies = [
+    { id: "inr", name: "INR", symbol: "₹" },
     { id: "usd", name: "USD", symbol: "$" },
     { id: "eur", name: "EUR", symbol: "€" },
     { id: "gbp", name: "GBP", symbol: "£" },
@@ -42,32 +70,18 @@ const EditGroupScreen = ({ navigation, route }) => {
     { id: "cad", name: "CAD", symbol: "CA$" },
   ];
 
-  // Fetch group data
+  // Initialize form with group data when available
   useEffect(() => {
-    // In a real app, this would be a fetch from an API or Redux store
-    const mockGroup = {
-      id: "1",
-      name: "Trip to Japan 🇯🇵",
-      description: "Vacationing with college friends in Japan",
-      currency: "USD",
-      categoryIds: ["1", "5"], // Trip, Friends
-      image: null,
-      members: [
-        { id: "1", name: "Andrew Ainsley (You)", email: "andrew@example.com" },
-        { id: "2", name: "Charlotte Hanlin", email: "charlotte@example.com" },
-        { id: "3", name: "Darren Kahminski", email: "darren@example.com" },
-        { id: "4", name: "Kevin Wilson", email: "kevin@example.com" },
-        { id: "5", name: "Joseph Thames", email: "joseph@example.com" },
-      ],
-    };
-
-    setGroup(mockGroup);
-    setGroupName(mockGroup.name);
-    setDescription(mockGroup.description);
-    setCurrency(mockGroup.currency);
-    setSelectedCategories(mockGroup.categoryIds);
-    setGroupImage(mockGroup.image);
-  }, [groupId]);
+    if (group) {
+      setGroupName(group.name || "");
+      setDescription(group.description || "");
+      setCurrency(group.currency || "INR");
+      setSelectedCategories(group.categories || []);
+      if (group.imageUrl) {
+        setGroupImage(group.imageUrl);
+      }
+    }
+  }, [group]);
 
   const pickImage = async () => {
     try {
@@ -76,13 +90,19 @@ const EditGroupScreen = ({ navigation, route }) => {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets && result.assets.length > 0) {
         setGroupImage(result.assets[0].uri);
+        // Store base64 image for API upload
+        if (result.assets[0].base64) {
+          setBase64Image(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        }
       }
     } catch (error) {
       console.log("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image. Please try again.");
     }
   };
 
@@ -106,11 +126,46 @@ const EditGroupScreen = ({ navigation, route }) => {
   };
 
   const handleSave = () => {
-    // In a real app, this would save the updated group to an API or Redux store
-    navigation.navigate("GroupDetail", {
-      groupId,
-      groupUpdated: true,
-    });
+    // Validate form
+    if (!groupName.trim()) {
+      Alert.alert("Error", "Please provide a group name");
+      return;
+    }
+
+    // Prepare data for API
+    const groupData = {
+      name: groupName,
+      description: description || "",
+      currency,
+      categories: selectedCategories,
+    };
+
+    // Add image if selected and changed
+    if (base64Image) {
+      groupData.groupImage = base64Image;
+    }
+
+    // Use the update mutation
+    updateGroupMutation.mutate(
+      { token, groupId, groupData },
+      {
+        onSuccess: (updatedGroup) => {
+          console.log("Group updated successfully:", updatedGroup);
+          navigation.navigate("GroupDetails", {
+            groupId,
+            groupUpdated: true,
+          });
+        },
+        onError: (error) => {
+          console.error("Error updating group:", error);
+          Alert.alert(
+            "Error",
+            error.response?.data?.message ||
+              "Failed to update group. Please try again."
+          );
+        },
+      }
+    );
   };
 
   const handleDeleteGroup = () => {
@@ -121,11 +176,49 @@ const EditGroupScreen = ({ navigation, route }) => {
     navigation.navigate("LeaveGroupConfirm", { groupId });
   };
 
+  // Show loading state while fetching group data
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading group information...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error state if fetch failed
+  if (isError) {
+    return (
+      <SafeAreaView style={styles.errorContainer}>
+        <MaterialIcons name="error-outline" size={48} color={colors.error} />
+        <Text style={styles.errorText}>
+          Error loading group: {error?.message || "Unknown error"}
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  // Make sure we have group data
   if (!group) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text>Loading...</Text>
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Group not found</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 
@@ -279,18 +372,31 @@ const EditGroupScreen = ({ navigation, route }) => {
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Group Members</Text>
           <View style={styles.membersContainer}>
-            {group.members.map((member) => (
-              <View key={member.id} style={styles.memberItem}>
-                <View style={styles.memberAvatar}>
-                  <Text style={styles.memberInitial}>
-                    {member.name.charAt(0)}
+            {group.participants &&
+              group.participants.map((participant, index) => (
+                <View key={index} style={styles.memberItem}>
+                  <View style={styles.memberAvatar}>
+                    <Text style={styles.memberInitial}>
+                      {participant.user?.username?.charAt(0) || "U"}
+                    </Text>
+                  </View>
+                  <Text style={styles.memberName}>
+                    {participant.user?.username ||
+                      participant.user?.email ||
+                      "Unknown User"}
                   </Text>
                 </View>
-                <Text style={styles.memberName}>{member.name}</Text>
-              </View>
-            ))}
+              ))}
           </View>
-          <TouchableOpacity style={styles.addMemberButton}>
+          <TouchableOpacity
+            style={styles.addMemberButton}
+            onPress={() => {
+              Alert.alert(
+                "Coming Soon",
+                "This feature will be available in a future update."
+              );
+            }}
+          >
             <MaterialIcons name="person-add" size={18} color={colors.gray800} />
             <Text style={styles.addMemberText}>Add Members</Text>
           </TouchableOpacity>
@@ -324,12 +430,17 @@ const EditGroupScreen = ({ navigation, route }) => {
         <TouchableOpacity
           style={[
             styles.saveButton,
-            !groupName.trim() && styles.disabledButton,
+            (!groupName.trim() || updateGroupMutation.isPending) &&
+              styles.disabledButton,
           ]}
           onPress={handleSave}
-          disabled={!groupName.trim()}
+          disabled={!groupName.trim() || updateGroupMutation.isPending}
         >
-          <Text style={styles.saveButtonText}>Save</Text>
+          {updateGroupMutation.isPending ? (
+            <ActivityIndicator size="small" color={colors.black} />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -597,6 +708,39 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     color: colors.black,
     fontWeight: typography.fontWeight.medium,
+  },
+  loadingText: {
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray900,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.lg,
+  },
+  errorText: {
+    marginBottom: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.error,
+  },
+  retryButton: {
+    padding: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+  },
+  retryButtonText: {
+    fontSize: typography.fontSize.md,
+    color: colors.white,
+    fontWeight: typography.fontWeight.medium,
+  },
+  backButton: {
+    padding: spacing.xs,
+  },
+  backButtonText: {
+    fontSize: typography.fontSize.md,
+    color: colors.gray900,
   },
 });
 

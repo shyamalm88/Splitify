@@ -16,6 +16,8 @@ import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { firebase } from "./src/config/firebase";
+import { registerRootComponent } from "expo";
+import { QueryProvider } from "./src/services/queryProvider";
 
 // Initialize Firebase if it hasn't been initialized already
 if (!firebase.apps.length) {
@@ -184,29 +186,34 @@ export default function App() {
   return (
     <AuthProvider>
       <NotificationProvider>
-        <NavigationContainer
-          ref={navigationRef}
-          linking={linking}
-          fallback={
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <ActivityIndicator size="large" color="#FEBA17" />
-            </View>
-          }
-          onStateChange={(state) => {
-            // Log navigation state changes for debugging
-            console.log("New nav state:", state?.routes?.[0]?.name);
-          }}
-        >
-          <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-          <RootNavigator />
-        </NavigationContainer>
+        <QueryProvider>
+          <NavigationContainer
+            ref={navigationRef}
+            linking={linking}
+            fallback={
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color="#FEBA17" />
+              </View>
+            }
+            onStateChange={(state) => {
+              // Log navigation state changes for debugging
+              console.log("New nav state:", state?.routes?.[0]?.name);
+            }}
+          >
+            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+            <RootNavigator />
+          </NavigationContainer>
+        </QueryProvider>
       </NotificationProvider>
     </AuthProvider>
   );
 }
+
+// Register the main component
+registerRootComponent(App);

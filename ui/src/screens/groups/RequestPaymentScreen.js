@@ -51,7 +51,7 @@ const RequestPaymentScreen = ({ navigation, route }) => {
         <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>Amount to request</Text>
           <View style={styles.amountInputContainer}>
-            <Text style={styles.currencySymbol}>$</Text>
+            <Text style={styles.currencySymbol}>₹</Text>
             <TextInput
               style={styles.amountInput}
               value={requestAmount}

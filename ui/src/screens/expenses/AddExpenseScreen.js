@@ -1,343 +1,337 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
   Text,
-  SafeAreaView,
-  ScrollView,
+  TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
-import { Button, TextField, Header, Avatar } from "../../components";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import DropDownPicker from "react-native-dropdown-picker";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
+import { useGroup } from "../../services/groupService";
 
-const CATEGORIES = [
-  { id: "1", name: "Food & Drink", icon: "🍔" },
-  { id: "2", name: "Entertainment", icon: "🎬" },
-  { id: "3", name: "Transportation", icon: "🚗" },
-  { id: "4", name: "Shopping", icon: "🛍️" },
-  { id: "5", name: "Utilities", icon: "💡" },
-  { id: "6", name: "Travel", icon: "✈️" },
-  { id: "7", name: "Home", icon: "🏠" },
-  { id: "8", name: "Other", icon: "📦" },
-];
+const AddExpenseScreen = ({ navigation, route }) => {
+  const { groupId, onSave } = route.params;
+  const { token, user } = useAuth();
 
-const FRIENDS = [
-  { id: "1", name: "Jane Smith" },
-  { id: "2", name: "Mike Johnson" },
-  { id: "3", name: "Sarah Williams" },
-  { id: "4", name: "David Brown" },
-  { id: "5", name: "Emily Davis" },
-];
+  // Fetch group data to get members and categories
+  const { data: groupData, isLoading: isLoadingGroup } = useGroup(
+    token,
+    groupId
+  );
 
-const AddExpenseScreen = ({ navigation }) => {
+  // Form state
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [note, setNote] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [selectedFriends, setSelectedFriends] = useState([]);
-  const [splitEqually, setSplitEqually] = useState(true);
-  const [customSplits, setCustomSplits] = useState({});
+  const [category, setCategory] = useState("");
+  const [notes, setNotes] = useState("");
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [titleError, setTitleError] = useState("");
-  const [amountError, setAmountError] = useState("");
-  const [categoryError, setCategoryError] = useState("");
-  const [friendsError, setFriendsError] = useState("");
+  // Dropdown state
+  const [openCategory, setOpenCategory] = useState(false);
+  const [categories, setCategories] = useState([]);
 
-  const handleCategorySelect = (category) => {
-    setSelectedCategory(category);
-    setCategoryError("");
-  };
+  // Split state
+  const [splits, setSplits] = useState([]);
+  const [splitMode, setSplitMode] = useState("equal"); // equal, percentage, custom
 
-  const handleFriendToggle = (friend) => {
-    setSelectedFriends((prev) => {
-      const isSelected = prev.some((f) => f.id === friend.id);
-      if (isSelected) {
-        const updated = prev.filter((f) => f.id !== friend.id);
-        // Remove custom split for this friend if exists
-        const newCustomSplits = { ...customSplits };
-        delete newCustomSplits[friend.id];
-        setCustomSplits(newCustomSplits);
-        return updated;
+  // Prepare category data for dropdown
+  useEffect(() => {
+    if (groupData?.categories) {
+      const categoryOptions = groupData.categories.map((cat) => ({
+        label: cat,
+        value: cat,
+      }));
+      if (categoryOptions.length > 0) {
+        setCategories([
+          ...categoryOptions,
+          { label: "Uncategorized", value: "Uncategorized" },
+        ]);
       } else {
-        return [...prev, friend];
+        setCategories([
+          { label: "Food", value: "Food" },
+          { label: "Transportation", value: "Transportation" },
+          { label: "Housing", value: "Housing" },
+          { label: "Entertainment", value: "Entertainment" },
+          { label: "Other", value: "Other" },
+          { label: "Uncategorized", value: "Uncategorized" },
+        ]);
       }
-    });
-    setFriendsError("");
-  };
-
-  const handleSplitTypeToggle = () => {
-    setSplitEqually(!splitEqually);
-    if (splitEqually) {
-      // Initialize custom splits with equal values
-      const totalFriends = selectedFriends.length + 1; // +1 for the current user
-      const equalShare = 100 / totalFriends;
-
-      const initialSplits = {};
-      selectedFriends.forEach((friend) => {
-        initialSplits[friend.id] = equalShare.toFixed(2);
-      });
-      setCustomSplits(initialSplits);
     }
+  }, [groupData]);
+
+  // Initialize splits based on group members
+  useEffect(() => {
+    if (groupData?.members) {
+      // Set up initial equal splits
+      const memberSplits = groupData.members.map((member) => ({
+        user: member.id,
+        name: member.name,
+        amount: 0, // Will be calculated
+      }));
+      setSplits(memberSplits);
+    }
+  }, [groupData]);
+
+  // Calculate splits whenever amount or split mode changes
+  useEffect(() => {
+    if (!amount || !splits.length) return;
+
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) return;
+
+    let newSplits = [...splits];
+
+    if (splitMode === "equal") {
+      // Equal split among all members
+      const perPersonAmount = numericAmount / newSplits.length;
+      newSplits = newSplits.map((split) => ({
+        ...split,
+        amount: parseFloat(perPersonAmount.toFixed(2)),
+      }));
+    } else if (splitMode === "percentage") {
+      // Keep current percentages but update amounts
+      // This is handled separately as users can adjust percentages manually
+    } else if (splitMode === "custom") {
+      // Keep custom amounts as they are
+    }
+
+    setSplits(newSplits);
+  }, [amount, splitMode, groupData?.members?.length]);
+
+  // Handle date change
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(false);
+    setDate(currentDate);
   };
 
-  const handleCustomSplitChange = (friendId, value) => {
-    setCustomSplits((prev) => ({
-      ...prev,
-      [friendId]: value,
-    }));
-  };
-
-  const validateForm = () => {
-    let isValid = true;
-
+  // Handle save
+  const handleSave = () => {
+    // Validate input
     if (!title.trim()) {
-      setTitleError("Please enter a title");
-      isValid = false;
-    } else {
-      setTitleError("");
+      Alert.alert("Error", "Please enter a title for the expense");
+      return;
     }
 
-    if (!amount) {
-      setAmountError("Please enter an amount");
-      isValid = false;
-    } else if (isNaN(Number(amount)) || Number(amount) <= 0) {
-      setAmountError("Please enter a valid amount");
-      isValid = false;
-    } else {
-      setAmountError("");
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
     }
 
-    if (!selectedCategory) {
-      setCategoryError("Please select a category");
-      isValid = false;
-    } else {
-      setCategoryError("");
+    // Validate that splits add up to total amount
+    const totalSplits = splits.reduce((sum, split) => sum + split.amount, 0);
+    const numericAmount = parseFloat(amount);
+
+    // Allow a small tolerance for floating point errors
+    if (Math.abs(totalSplits - numericAmount) > 0.01) {
+      Alert.alert(
+        "Error",
+        `The splits don't add up to the total amount. Total: ${numericAmount}, Splits: ${totalSplits.toFixed(2)}`
+      );
+      return;
     }
 
-    if (selectedFriends.length === 0) {
-      setFriendsError("Please select at least one friend");
-      isValid = false;
-    } else {
-      setFriendsError("");
-    }
+    // Prepare expense data
+    const expenseData = {
+      title,
+      amount: parseFloat(amount),
+      category: category || "Uncategorized",
+      date,
+      notes,
+      splits: splits.map((split) => ({
+        user: split.user,
+        amount: split.amount,
+      })),
+    };
 
-    return isValid;
-  };
-
-  const handleSubmit = () => {
-    if (validateForm()) {
-      // Save expense logic here
+    // Call the onSave callback from route params
+    if (onSave) {
+      onSave(expenseData);
       navigation.goBack();
     }
   };
 
+  // Handle cancel
+  const handleCancel = () => {
+    navigation.goBack();
+  };
+
+  // Toggle split mode
+  const toggleSplitMode = () => {
+    const modes = ["equal", "percentage", "custom"];
+    const currentIndex = modes.indexOf(splitMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    setSplitMode(modes[nextIndex]);
+  };
+
+  // Update a specific split
+  const updateSplit = (index, amount) => {
+    const newSplits = [...splits];
+    newSplits[index] = {
+      ...newSplits[index],
+      amount: parseFloat(amount) || 0,
+    };
+    setSplits(newSplits);
+  };
+
+  if (isLoadingGroup) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading group data...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <Header
-        title="Add Expense"
-        leftIcon={<Text style={styles.backButton}>←</Text>}
-        onLeftPress={() => navigation.goBack()}
-      />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.keyboardAvoidingView}
+      <KeyboardAwareScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.form}>
-            <TextField
-              label="Title"
-              placeholder="What is this expense for?"
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
+            <Text style={styles.cancelButton}>Cancel</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Add Expense</Text>
+          <TouchableOpacity onPress={handleSave} style={styles.headerButton}>
+            <Text style={styles.saveButton}>Save</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.formContainer}>
+          {/* Title Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Title</Text>
+            <TextInput
+              style={styles.input}
               value={title}
               onChangeText={setTitle}
-              error={titleError}
+              placeholder="What was this expense for?"
+              placeholderTextColor={colors.gray400}
             />
+          </View>
 
-            <TextField
-              label="Amount"
-              placeholder="0.00"
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-              error={amountError}
-              leftIcon={<Text style={styles.currencySymbol}>$</Text>}
+          {/* Amount Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Amount</Text>
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.currencySymbol}>
+                {groupData?.currency || "$"}
+              </Text>
+              <TextInput
+                style={styles.amountInput}
+                value={amount}
+                onChangeText={setAmount}
+                placeholder="0.00"
+                placeholderTextColor={colors.gray400}
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+
+          {/* Category Dropdown */}
+          <View style={[styles.inputGroup, { zIndex: 1000 }]}>
+            <Text style={styles.label}>Category</Text>
+            <DropDownPicker
+              open={openCategory}
+              value={category}
+              items={categories}
+              setOpen={setOpenCategory}
+              setValue={setCategory}
+              style={styles.dropdownStyle}
+              dropDownContainerStyle={styles.dropdownContainerStyle}
+              placeholder="Select a category"
             />
+          </View>
 
-            <TextField
-              label="Date"
-              value={date}
-              onChangeText={setDate}
-              placeholder="YYYY-MM-DD"
-            />
+          {/* Date Picker */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Date</Text>
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
+              <MaterialIcons
+                name="calendar-today"
+                size={20}
+                color={colors.gray700}
+              />
+            </TouchableOpacity>
+            {showDatePicker && (
+              <DateTimePicker
+                value={date}
+                mode="date"
+                display="default"
+                onChange={onChangeDate}
+              />
+            )}
+          </View>
 
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Category</Text>
-              {categoryError ? (
-                <Text style={styles.errorText}>{categoryError}</Text>
-              ) : null}
-
-              <View style={styles.categoryContainer}>
-                {CATEGORIES.map((category) => (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={[
-                      styles.categoryItem,
-                      selectedCategory?.id === category.id &&
-                        styles.selectedCategoryItem,
-                    ]}
-                    onPress={() => handleCategorySelect(category)}
-                  >
-                    <Text style={styles.categoryIcon}>{category.icon}</Text>
-                    <Text
-                      style={[
-                        styles.categoryName,
-                        selectedCategory?.id === category.id &&
-                          styles.selectedCategoryName,
-                      ]}
-                    >
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>Split With</Text>
-              {friendsError ? (
-                <Text style={styles.errorText}>{friendsError}</Text>
-              ) : null}
-
-              <View style={styles.friendsContainer}>
-                {FRIENDS.map((friend) => (
-                  <TouchableOpacity
-                    key={friend.id}
-                    style={[
-                      styles.friendItem,
-                      selectedFriends.some((f) => f.id === friend.id) &&
-                        styles.selectedFriendItem,
-                    ]}
-                    onPress={() => handleFriendToggle(friend)}
-                  >
-                    <Avatar name={friend.name} size="small" />
-                    <Text style={styles.friendName}>{friend.name}</Text>
-                    {selectedFriends.some((f) => f.id === friend.id) && (
-                      <View style={styles.checkmark}>
-                        <Text>✓</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.sectionContainer}>
-              <View style={styles.splitHeader}>
-                <Text style={styles.sectionTitle}>Split Method</Text>
-                <View style={styles.splitToggle}>
-                  <TouchableOpacity
-                    style={[
-                      styles.splitToggleButton,
-                      splitEqually && styles.splitToggleButtonActive,
-                    ]}
-                    onPress={() => setSplitEqually(true)}
-                  >
-                    <Text
-                      style={[
-                        styles.splitToggleText,
-                        splitEqually && styles.splitToggleTextActive,
-                      ]}
-                    >
-                      Equal
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.splitToggleButton,
-                      !splitEqually && styles.splitToggleButtonActive,
-                    ]}
-                    onPress={() => setSplitEqually(false)}
-                  >
-                    <Text
-                      style={[
-                        styles.splitToggleText,
-                        !splitEqually && styles.splitToggleTextActive,
-                      ]}
-                    >
-                      Custom
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {!splitEqually && selectedFriends.length > 0 && (
-                <View style={styles.customSplitContainer}>
-                  <View style={styles.splitItem}>
-                    <Avatar name="You" size="small" />
-                    <Text style={styles.splitName}>You</Text>
-                    <TextField
-                      value={(
-                        100 -
-                        Object.values(customSplits).reduce(
-                          (sum, val) => sum + Number(val || 0),
-                          0
-                        )
-                      ).toFixed(2)}
-                      editable={false}
-                      style={styles.splitInput}
-                      inputStyle={styles.splitInputText}
-                      rightIcon={<Text style={styles.percentText}>%</Text>}
-                    />
-                  </View>
-
-                  {selectedFriends.map((friend) => (
-                    <View key={friend.id} style={styles.splitItem}>
-                      <Avatar name={friend.name} size="small" />
-                      <Text style={styles.splitName}>{friend.name}</Text>
-                      <TextField
-                        keyboardType="numeric"
-                        value={customSplits[friend.id] || ""}
-                        onChangeText={(value) =>
-                          handleCustomSplitChange(friend.id, value)
-                        }
-                        style={styles.splitInput}
-                        inputStyle={styles.splitInputText}
-                        rightIcon={<Text style={styles.percentText}>%</Text>}
-                      />
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            <TextField
-              label="Note (Optional)"
-              placeholder="Add a note about this expense"
-              value={note}
-              onChangeText={setNote}
+          {/* Notes Input */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Notes (Optional)</Text>
+            <TextInput
+              style={[styles.input, styles.notesInput]}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Add notes about this expense"
+              placeholderTextColor={colors.gray400}
               multiline
               numberOfLines={3}
             />
           </View>
 
-          <View style={styles.buttonContainer}>
-            <Button
-              title="Add Expense"
-              onPress={handleSubmit}
-              size="large"
-              fullWidth
-            />
+          {/* Split Section */}
+          <View style={styles.splitSection}>
+            <View style={styles.splitHeader}>
+              <Text style={styles.splitTitle}>Split Details</Text>
+              <TouchableOpacity onPress={toggleSplitMode}>
+                <Text style={styles.splitModeButton}>
+                  {splitMode === "equal"
+                    ? "Equal Split"
+                    : splitMode === "percentage"
+                      ? "Percentage Split"
+                      : "Custom Split"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.splitsContainer}>
+              {splits.map((split, index) => (
+                <View key={split.user} style={styles.splitItem}>
+                  <Text style={styles.splitName}>{split.name}</Text>
+                  {splitMode === "equal" ? (
+                    <Text style={styles.splitAmount}>
+                      {groupData?.currency || "$"}
+                      {split.amount.toFixed(2)}
+                    </Text>
+                  ) : (
+                    <TextInput
+                      style={styles.splitAmountInput}
+                      value={split.amount.toString()}
+                      onChangeText={(value) => updateSplit(index, value)}
+                      keyboardType="decimal-pad"
+                    />
+                  )}
+                </View>
+              ))}
+            </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 };
@@ -347,152 +341,174 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.white,
   },
-  backButton: {
-    fontSize: 24,
-    color: colors.gray800,
-  },
-  keyboardAvoidingView: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.white,
+  },
+  loadingText: {
+    marginTop: spacing.sm,
+    fontSize: typography.fontSize.md,
+    color: colors.gray700,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.xl * 2,
+    paddingBottom: spacing.xxl,
   },
-  form: {
-    marginBottom: spacing.xl,
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
   },
-  sectionContainer: {
-    marginBottom: spacing.lg,
+  headerButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
-  sectionTitle: {
+  headerTitle: {
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     color: colors.gray900,
-    marginBottom: spacing.sm,
   },
-  errorText: {
+  cancelButton: {
+    fontSize: typography.fontSize.md,
+    color: colors.gray600,
+  },
+  saveButton: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.primary,
+  },
+  formContainer: {
+    padding: spacing.md,
+  },
+  inputGroup: {
+    marginBottom: spacing.lg,
+  },
+  label: {
     fontSize: typography.fontSize.sm,
-    color: colors.error,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray700,
     marginBottom: spacing.xs,
   },
-  categoryContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -spacing.xs / 2,
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    fontSize: typography.fontSize.md,
+    color: colors.gray900,
+    backgroundColor: colors.white,
   },
-  categoryItem: {
+  amountInputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.gray200,
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.gray300,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginHorizontal: spacing.xs / 2,
-    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.white,
   },
-  selectedCategoryItem: {
-    backgroundColor: colors.transparentPrimary,
-  },
-  categoryIcon: {
+  currencySymbol: {
     fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray700,
     marginRight: spacing.xs,
   },
-  categoryName: {
-    fontSize: typography.fontSize.sm,
-    color: colors.gray700,
-  },
-  selectedCategoryName: {
-    color: colors.primary,
+  amountInput: {
+    flex: 1,
+    fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.medium,
+    color: colors.gray900,
   },
-  friendsContainer: {
-    marginTop: spacing.xs,
+  dropdownStyle: {
+    borderColor: colors.gray300,
+    height: 48,
   },
-  friendItem: {
+  dropdownContainerStyle: {
+    borderColor: colors.gray300,
+  },
+  datePickerButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray300,
+    justifyContent: "space-between",
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.white,
   },
-  selectedFriendItem: {
-    backgroundColor: colors.transparentPrimary,
-  },
-  friendName: {
+  dateText: {
     fontSize: typography.fontSize.md,
-    color: colors.gray800,
-    marginLeft: spacing.md,
-    flex: 1,
+    color: colors.gray900,
   },
-  checkmark: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
+  notesInput: {
+    height: 100,
+    textAlignVertical: "top",
+    paddingTop: spacing.sm,
+  },
+  splitSection: {
+    marginTop: spacing.md,
   },
   splitHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
-  splitToggle: {
-    flexDirection: "row",
-    backgroundColor: colors.gray200,
-    borderRadius: borderRadius.full,
-    overflow: "hidden",
+  splitTitle: {
+    fontSize: typography.fontSize.md,
+    fontWeight: typography.fontWeight.semibold,
+    color: colors.gray900,
   },
-  splitToggleButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  splitToggleButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  splitToggleText: {
+  splitModeButton: {
     fontSize: typography.fontSize.sm,
+    color: colors.primary,
     fontWeight: typography.fontWeight.medium,
-    color: colors.gray700,
   },
-  splitToggleTextActive: {
-    color: colors.white,
-  },
-  customSplitContainer: {
-    marginTop: spacing.sm,
+  splitsContainer: {
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    borderRadius: borderRadius.md,
+    overflow: "hidden",
   },
   splitItem: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
   },
   splitName: {
     fontSize: typography.fontSize.md,
     color: colors.gray800,
-    flex: 1,
-    marginLeft: spacing.md,
   },
-  splitInput: {
-    width: 100,
-    marginBottom: 0,
-  },
-  splitInputText: {
-    textAlign: "right",
-  },
-  percentText: {
+  splitAmount: {
     fontSize: typography.fontSize.md,
-    color: colors.gray700,
+    fontWeight: typography.fontWeight.medium,
+    color: colors.gray800,
   },
-  currencySymbol: {
-    fontSize: typography.fontSize.lg,
-    color: colors.gray700,
-  },
-  buttonContainer: {
-    marginBottom: spacing.xl,
+  splitAmountInput: {
+    width: 80,
+    height: 36,
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    textAlign: "right",
+    fontSize: typography.fontSize.md,
+    color: colors.gray900,
   },
 });
 

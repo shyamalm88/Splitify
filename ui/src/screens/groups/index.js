@@ -10,3 +10,5 @@ export { default as LeaveGroupConfirmScreen } from "./LeaveGroupConfirmScreen";
 export { default as DeleteGroupConfirmScreen } from "./DeleteGroupConfirmScreen";
 export { default as SelectCategoryScreen } from "./SelectCategoryScreen";
 export { default as RequestPaymentScreen } from "./RequestPaymentScreen";
+export { default as GroupSettingsScreen } from "./GroupSettingsScreen";
+export { default as GroupCreationSuccessScreen } from "./GroupCreationSuccessScreen";

@@ -10,9 +10,9 @@ import { Platform } from "react-native";
 // Use IP address that works for both emulators and physical devices
 export const API_URL = __DEV__
   ? Platform.OS === "android"
-    ? "http://192.168.1.2:5001/api" // Use actual IP address for Android
+    ? "http://10.0.2.2:5001/api" // Use special IP for Android emulator
     : Platform.OS === "ios"
-      ? "http://192.168.1.2:5001/api" // Use actual IP address for iOS
+      ? "http://localhost:5001/api" // Use localhost for iOS simulator
       : "http://localhost:5001/api" // Default for web
   : "https://splitify-api.yourdomain.com/api"; // Production API URL
 

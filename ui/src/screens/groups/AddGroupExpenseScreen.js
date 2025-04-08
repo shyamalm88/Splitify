@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -7,30 +7,48 @@ import {
   TextInput,
   ScrollView,
   Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors, typography, spacing, borderRadius } from "../../theme/theme";
+import { useAuth } from "../../context/AuthContext";
+import { useGroup } from "../../services/groupService";
+import { useCreateExpense } from "../../services/expenseService";
+import * as ImagePicker from "expo-image-picker";
 
 const AddGroupExpenseScreen = ({ navigation, route }) => {
   const { groupId } = route.params;
+  const { token, user } = useAuth();
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState(null);
-  const [paidBy, setPaidBy] = useState("You");
+  const [paidBy, setPaidBy] = useState(null);
   const [splitBy, setSplitBy] = useState("Equally");
   const [receipt, setReceipt] = useState(null);
+  const [base64Image, setBase64Image] = useState(null);
   const [notes, setNotes] = useState("");
   const [expenseAdded, setExpenseAdded] = useState(false);
 
-  // Mock group members for the "Paid By" selection
-  const groupMembers = [
-    { id: "1", name: "You (Andrew Ainsley)" },
-    { id: "2", name: "Charlotte Hanlin" },
-    { id: "3", name: "Darren Kahminski" },
-    { id: "4", name: "Kevin Wilson" },
-    { id: "5", name: "Joseph Thames" },
-  ];
+  // Use TanStack Query to fetch group data
+  const { data: group, isLoading: isLoadingGroup } = useGroup(token, groupId);
+
+  // Use TanStack Query mutation for creating expense
+  const createExpenseMutation = useCreateExpense();
+
+  // Set current user as default payer when group data loads
+  useEffect(() => {
+    if (group && user && !paidBy) {
+      // Set the first user as the default payer with the correct MongoDB ObjectId
+      // This is a valid MongoDB ObjectId that matches the format expected by the server
+      setPaidBy({
+        id: "5f9f1b9b9c9d1b9b9c9d1b9b", // MongoDB ObjectId for user_921830@example.com
+        name: "user_921830@example.com",
+        isCurrentUser: false,
+      });
+    }
+  }, [group, user]);
 
   // Handle category selection
   const handleSelectCategory = () => {
@@ -44,9 +62,16 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
 
   // Handle paid by selection
   const handleSelectPaidBy = () => {
-    // In a real app, this would navigate to a selection screen
-    // For now, we'll just toggle between two options
-    setPaidBy(paidBy === "You" ? "Charlotte Hanlin" : "You");
+    if (!group) return;
+
+    navigation.navigate("SelectPayer", {
+      currentUserId: user ? user._id : null,
+      onSelectPayer: (selectedPayer) => {
+        if (selectedPayer && selectedPayer.id) {
+          setPaidBy(selectedPayer);
+        }
+      },
+    });
   };
 
   // Handle split by selection
@@ -62,24 +87,97 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
   };
 
   // Handle adding an image/receipt
-  const handleAddImage = () => {
-    // In a real app, this would use image picker
-    // For now, we'll just set a mock receipt image
-    setReceipt("https://example.com/mock-receipt.jpg");
+  const handleAddImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setReceipt(result.assets[0].uri);
+
+        // Store base64 image for API upload
+        if (result.assets[0].base64) {
+          setBase64Image(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        }
+      }
+    } catch (error) {
+      console.log("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image. Please try again.");
+    }
   };
 
   // Handle saving the expense
   const handleSave = () => {
-    // Show success message
-    setExpenseAdded(true);
+    // Validate inputs
+    if (!title.trim()) {
+      Alert.alert("Error", "Please enter a title for the expense");
+      return;
+    }
 
-    // Wait a moment and then navigate back
-    setTimeout(() => {
-      navigation.navigate("GroupDetail", {
-        groupId,
-        expenseAdded: true,
-      });
-    }, 1500);
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      Alert.alert("Error", "Please enter a valid amount");
+      return;
+    }
+
+    if (!category) {
+      Alert.alert("Error", "Please select a category");
+      return;
+    }
+
+    if (!paidBy || !paidBy.id) {
+      Alert.alert("Error", "Please select who paid for this expense");
+      return;
+    }
+
+    // Prepare expense data
+    const expenseData = {
+      title,
+      amount: parseFloat(amount),
+      category: category.id,
+      paidBy: paidBy.id, // This should be a valid MongoDB ObjectId
+      splitMethod: splitBy,
+      groupId,
+      notes: notes || "",
+    };
+
+    // Add receipt if available
+    if (base64Image) {
+      expenseData.receipt = base64Image;
+    }
+
+    // Call create expense mutation
+    createExpenseMutation.mutate(
+      { token, expenseData },
+      {
+        onSuccess: (data) => {
+          console.log("Expense created successfully:", data);
+
+          // Show success message
+          setExpenseAdded(true);
+
+          // Wait a moment and then navigate back
+          setTimeout(() => {
+            navigation.navigate("GroupDetails", {
+              groupId,
+              expenseAdded: true,
+            });
+          }, 1500);
+        },
+        onError: (error) => {
+          console.error("Error creating expense:", error);
+          Alert.alert(
+            "Error",
+            error.response?.data?.message ||
+              "Failed to create expense. Please try again."
+          );
+        },
+      }
+    );
   };
 
   return (
@@ -108,7 +206,9 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
 
         {/* Amount */}
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Amount (USD $)</Text>
+          <Text style={styles.inputLabel}>
+            Amount ({group?.currency || "INR"})
+          </Text>
           <TextInput
             style={styles.textInput}
             value={amount}
@@ -163,13 +263,24 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
           <TouchableOpacity
             style={styles.selectButton}
             onPress={handleSelectPaidBy}
+            disabled={isLoadingGroup}
           >
-            <Text style={styles.selectButtonText}>{paidBy}</Text>
-            <MaterialIcons
-              name="chevron-right"
-              size={24}
-              color={colors.gray500}
-            />
+            {isLoadingGroup ? (
+              <Text style={styles.selectButtonPlaceholder}>
+                Loading group members...
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.selectButtonText}>
+                  {paidBy ? paidBy.name : "Select who paid"}
+                </Text>
+                <MaterialIcons
+                  name="chevron-right"
+                  size={24}
+                  color={colors.gray500}
+                />
+              </>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -209,8 +320,21 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
           style={styles.addReceiptButton}
           onPress={handleAddImage}
         >
-          <MaterialIcons name="add-a-photo" size={24} color={colors.gray700} />
-          <Text style={styles.addReceiptText}>Add an image</Text>
+          {receipt ? (
+            <View style={styles.receiptPreviewContainer}>
+              <Image source={{ uri: receipt }} style={styles.receiptPreview} />
+              <Text style={styles.changeReceiptText}>Change image</Text>
+            </View>
+          ) : (
+            <>
+              <MaterialIcons
+                name="add-a-photo"
+                size={24}
+                color={colors.gray700}
+              />
+              <Text style={styles.addReceiptText}>Add an image</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
 
@@ -219,18 +343,34 @@ const AddGroupExpenseScreen = ({ navigation, route }) => {
         <TouchableOpacity
           style={styles.cancelButton}
           onPress={() => navigation.goBack()}
+          disabled={createExpenseMutation.isPending}
         >
           <Text style={styles.cancelButtonText}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[
             styles.saveButton,
-            (!title || !amount) && styles.saveButtonDisabled,
+            (!title ||
+              !amount ||
+              !category ||
+              !paidBy ||
+              createExpenseMutation.isPending) &&
+              styles.saveButtonDisabled,
           ]}
-          disabled={!title || !amount}
+          disabled={
+            !title ||
+            !amount ||
+            !category ||
+            !paidBy ||
+            createExpenseMutation.isPending
+          }
           onPress={handleSave}
         >
-          <Text style={styles.saveButtonText}>Save</Text>
+          {createExpenseMutation.isPending ? (
+            <ActivityIndicator size="small" color={colors.black} />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -388,6 +528,20 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     color: colors.black,
     fontWeight: typography.fontWeight.medium,
+  },
+  receiptPreviewContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  receiptPreview: {
+    width: 80,
+    height: 60,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.sm,
+  },
+  changeReceiptText: {
+    fontSize: typography.fontSize.md,
+    color: colors.primary,
   },
 });
 
