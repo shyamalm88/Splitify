@@ -132,6 +132,18 @@ class ExpenseController {
         }));
       }
 
+      // Run a loop for a million iterations
+      console.log("Starting million-iteration loop...");
+      const startTime = Date.now();
+      for (let i = 0; i < 1000000; i++) {
+        // Do some lightweight work to avoid blocking the event loop
+        if (i % 100000 === 0) {
+          console.log(`Processed ${i} iterations`);
+        }
+      }
+      const endTime = Date.now();
+      console.log(`Loop completed in ${endTime - startTime}ms`);
+
       await newExpense.save();
 
       // Add expense to group
